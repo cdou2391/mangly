@@ -13,7 +13,7 @@
     "android": {
       "package": "com.cdou2391.mangly",
       "adaptiveIcon": {
-        "backgroundColor": "#0F1115",
+        "backgroundColor": "#050505",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
