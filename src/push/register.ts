@@ -21,6 +21,14 @@ Notifications.setNotificationHandler({
 export async function registerForPush(): Promise<void> {
   if (Platform.OS !== "android" || !Device.isDevice) return; // emulators cannot receive push
 
+  // Check this first: without an EAS project there is no token to fetch, so do not prompt the user
+  // for a permission that cannot be used yet.
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
+  if (!projectId) {
+    console.warn("Push disabled: set extra.eas.projectId (run `eas init`).");
+    return;
+  }
+
   await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
     name: "New chapters",
     importance: Notifications.AndroidImportance.DEFAULT,
@@ -30,11 +38,6 @@ export async function registerForPush(): Promise<void> {
   if (status !== "granted") ({ status } = await Notifications.requestPermissionsAsync());
   if (status !== "granted") return;
 
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
-  if (!projectId) {
-    console.warn("Push disabled: set extra.eas.projectId (run `eas init`).");
-    return;
-  }
   const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
   const device = await devicesApi.register(token, Device.deviceName ?? undefined);
   await SecureStore.setItemAsync(DEVICE_ID_KEY, String(device.id));

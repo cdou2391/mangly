@@ -17,19 +17,20 @@ Mangly is a **client only**. It talks to a MangaPulse backend over HTTPS and own
 
 | Area | State |
 |---|---|
-| Sign in / register / sign out | Implemented in the app. Backend done on MangaPulse branch `feat/mobile-auth`; **needs merging and deploying** |
+| Sign in / register / sign out | Implemented. Backend merged in MangaPulse PR #20; **must be deployed** for sign-in to work |
 | Library, title detail, status and progress edits | Implemented (existing API) |
 | Updates feed, search and track, alerts inbox | Implemented (existing API) |
 | Push notifications | App side implemented. **Needs the MangaPulse device endpoints and sender** |
 | AI recommendations, admin | Not started |
 
-The backend changes are specified in [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.md). Until the MangaPulse changes are deployed, sign-in returns 404 from `/auth/mobile/login`.
+The backend changes are specified in [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.md). Until the MangaPulse release containing PR #20 is deployed, sign-in returns 404 from `/auth/mobile/login`.
 
-## Initial APK (splash + home empty state)
+## Installable APK
 
-The first installable build shows only the splash screen and an empty home screen. It does no sign-in and makes no network calls. It is selected at build time with `EXPO_PUBLIC_SHELL_ONLY=1`.
+Every push to a `claude/**` branch or a `v*` tag builds an APK in GitHub Actions (**Actions → Build APK**, artifact `mangly-apk`). Download it, unzip, and sideload the `.apk`. The build points at `https://mangapulse.corecrest.tech/api/v1` and fails if that URL is not in the compiled bundle.
 
-**Get it:** push to a `claude/**` branch, a `v*` tag, or run **Actions → Build APK → Run workflow**, then download `mangly-shell-apk` from the run page and sideload the `.apk`.
+- **Full app (default):** sign-in, library, search, updates, alerts, settings. Needs the MangaPulse mobile auth endpoints deployed (`feat/mobile-auth`, merged as MangaPulse PR #20).
+- **Shell:** only the splash and the empty home screen, no network. Set `EXPO_PUBLIC_SHELL_ONLY: "1"` in `.github/workflows/build-apk.yml`.
 
 **Signing:** the APK is signed with the Expo debug keystore. That is fine for testing. Do not distribute it, and expect to uninstall it before installing a properly signed build later.
 
@@ -54,7 +55,7 @@ Push notifications need a **development or release build** and a physical device
 | Command | Purpose |
 |---|---|
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Jest (API client, token refresh) |
+| `npm test` | Jest: API client and token refresh, plus navigation smoke tests that render the real route tree |
 | `npm run check` | Both of the above; CI runs the same |
 
 ## Build and release

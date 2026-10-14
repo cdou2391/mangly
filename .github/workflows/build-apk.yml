@@ -1,7 +1,8 @@
 name: Build APK
 
-# Builds an installable Android APK of the initial shell (splash + home empty state)
-# on a GitHub-hosted runner, which already has the Android SDK. The APK is uploaded as a run artifact.
+# Builds an installable Android APK of the full app on a GitHub-hosted runner, which already has the
+# Android SDK. The APK is uploaded as a run artifact. (Set EXPO_PUBLIC_SHELL_ONLY to "1" below to build
+# the splash + empty-home shell instead.)
 on:
   push:
     branches: ["claude/**"]
@@ -16,7 +17,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  EXPO_PUBLIC_SHELL_ONLY: "1"
+  EXPO_PUBLIC_SHELL_ONLY: "0"
+  # Public URL of the MangaPulse API (not a secret). Release builds must use https.
+  EXPO_PUBLIC_API_URL: https://mangapulse.corecrest.tech/api/v1
   EXPO_NO_TELEMETRY: "1"
   CI: "1"
 
@@ -61,9 +64,18 @@ jobs:
           AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
           "$AAPT" dump badging "$APK" | grep -E "^(package|launchable-activity|uses-permission)" || true
 
+      - name: Verify the API URL baked into the bundle
+        run: |
+          # A build pointed at the wrong server would install fine and then fail every request,
+          # so check the compiled JS bundle itself rather than trusting the environment.
+          unzip -p "$APK" assets/index.android.bundle | strings > bundle.txt
+          grep -q "$EXPO_PUBLIC_API_URL" bundle.txt || { echo "::error::API URL $EXPO_PUBLIC_API_URL is not in the bundle"; exit 1; }
+          if grep -q "10\.0\.2\.2" bundle.txt; then echo "::error::emulator fallback URL is in the bundle"; exit 1; fi
+          echo "API URL OK: $EXPO_PUBLIC_API_URL"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: mangly-shell-apk
+          name: mangly-apk
           path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
