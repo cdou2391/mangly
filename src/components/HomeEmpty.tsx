@@ -12,7 +12,7 @@ export function HomeEmpty() {
           source={require("../../assets/logo.png")}
           style={s.logo}
           contentFit="contain"
-          accessibilityLabel="Mangly logo"
+          accessibilityLabel="MangaPulse logo"
         />
         <Text accessibilityRole="header" style={{ color: t.text, fontSize: 22, fontWeight: "700" }}>
           Your library is empty

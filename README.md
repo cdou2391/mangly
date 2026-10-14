@@ -1,8 +1,8 @@
-# Mangly
+# MangaPulse for Android
 
 Android app for [MangaPulse](https://github.com/cdou2391/MangaPulse): track manga across MangaRead and WeebCentral and get a push notification when a new chapter drops.
 
-Mangly is a **client only**. It talks to a MangaPulse backend over HTTPS and owns no scraping, database or scheduling logic.
+The app is shown to users as **MangaPulse** (the code lives in the `mangly` repository). It is a **client only**. It talks to a MangaPulse backend over HTTPS and owns no scraping, database or scheduling logic.
 
 | | |
 |---|---|
@@ -12,6 +12,8 @@ Mangly is a **client only**. It talks to a MangaPulse backend over HTTPS and own
 | Auth | Bearer access token (memory) + rotating refresh token (Android Keystore via `expo-secure-store`) |
 | Push | `expo-notifications` + Expo Push Service (FCM underneath) |
 | Platform | Android only |
+
+> **Naming.** The launcher name is set by `name` in `app.json`. The Android package id (`com.cdou2391.mangly`), the Expo `slug` and the storage keys keep the original `mangly` name on purpose: changing the package id makes Android treat the app as a different one, so it could not be installed over an existing copy and would lose the saved login.
 
 ## Status
 
