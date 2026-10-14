@@ -8,3 +8,6 @@ export const REQUEST_TIMEOUT_MS = 20_000;
  * Enabled at build time with EXPO_PUBLIC_SHELL_ONLY=1 (see .github/workflows/build-apk.yml).
  */
 export const SHELL_ONLY = process.env.EXPO_PUBLIC_SHELL_ONLY === "1";
+
+/** Origin of the MangaPulse web app (the API URL without /api/v1); used for pages the app does not have, such as password reset. */
+export const WEB_URL = API_URL.replace(/\/api\/v1$/, "");

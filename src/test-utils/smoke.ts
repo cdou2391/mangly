@@ -35,4 +35,5 @@ export function resetClientState() {
   setSessionListener(() => {});
 }
 
-export const SIGN_IN_TEXT = "Sign in with your MangaPulse account.";
+// A string only the sign-in screen renders (its primary button).
+export const SIGN_IN_TEXT = "Log In";
