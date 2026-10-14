@@ -17,13 +17,13 @@ Mangly is a **client only**. It talks to a MangaPulse backend over HTTPS and own
 
 | Area | State |
 |---|---|
-| Sign in / register / sign out | Implemented in the app. **Needs the MangaPulse mobile auth endpoints** |
+| Sign in / register / sign out | Implemented in the app. Backend done on MangaPulse branch `feat/mobile-auth`; **needs merging and deploying** |
 | Library, title detail, status and progress edits | Implemented (existing API) |
 | Updates feed, search and track, alerts inbox | Implemented (existing API) |
 | Push notifications | App side implemented. **Needs the MangaPulse device endpoints and sender** |
 | AI recommendations, admin | Not started |
 
-The backend changes are specified in [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.md). Until they ship, sign-in returns 404 from `/auth/mobile/login`.
+The backend changes are specified in [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.md). Until the MangaPulse changes are deployed, sign-in returns 404 from `/auth/mobile/login`.
 
 ## Initial APK (splash + home empty state)
 

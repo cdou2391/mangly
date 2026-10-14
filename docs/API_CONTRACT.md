@@ -24,9 +24,9 @@ Types live in `src/api/types.ts` and mirror `backend/app/schemas` in MangaPulse.
 | PATCH | `/notifications/{id}/read`, `/notifications/read-all` | Alerts |
 | DELETE | `/notifications/read` | Alerts (planned) |
 
-**Prerequisite:** `get_current_user` currently reads only the `access_token` cookie. It must also accept `Authorization: Bearer`.
+**Bearer support:** every endpoint above accepts `Authorization: Bearer <access_token>` (implemented in MangaPulse `feat/mobile-auth`). A bearer header takes precedence and, if sent, must be valid.
 
-## New endpoints
+## Mobile auth endpoints (implemented in MangaPulse `feat/mobile-auth`)
 
 ### `POST /auth/mobile/login`
 
@@ -38,23 +38,32 @@ Response `200`
 ```json
 {
   "access_token": "<jwt>",
-  "refresh_token": "<opaque>",
+  "refresh_token": "mpr_…",
   "token_type": "bearer",
   "expires_in": 900,
   "user": { "id": 1, "full_name": "…", "email": "…", "role": "user", "is_active": true,
             "created_at": "…", "updated_at": "…", "features": [] }
 }
 ```
-Errors: `401` bad credentials (same message as web), `429` rate limited.
+Errors: `401` bad credentials (identical body for unknown email and wrong password), `422` invalid input, `429` too many failures for this account (`Retry-After` header) or per-IP limit (10/min). No cookie is set.
 
 ### `POST /auth/mobile/refresh`
 
-Request `{ "refresh_token": "<opaque>" }` → same body as login (new pair; the old refresh token is invalidated).
-Errors: `401` unknown, expired, revoked or **reused** token (reuse revokes the whole family).
+Request `{ "refresh_token": "mpr_…" }` → same body as login. The presented token is retired and a new one issued.
+Errors: `401` unknown, expired, revoked or reused token; `422` malformed token; `429` (30/min per IP).
+
+Semantics the client relies on:
+- **Retry window:** presenting a just-rotated token again within 10 seconds succeeds (and returns a fresh pair). This covers a response lost on a bad connection.
+- **Reuse:** presenting a rotated token after that window is treated as theft: the whole session is revoked and every call returns `401` until the user signs in again.
+- Sessions end at 30 days without use, and at 90 days regardless of use.
 
 ### `POST /auth/mobile/logout`
 
-Request `{ "refresh_token": "<opaque>" }` (authenticated) → `{ "message": "…" }`. Revokes that refresh token and the access token's `jti`.
+Request `{ "refresh_token": "mpr_…" }` → `200 { "message": "…" }`. **Needs no access token**: possession of the refresh token authenticates it, so it works after the access token expired. Ends that session immediately, including its live access tokens. Idempotent; an unknown token also returns `200`.
+
+### Events that sign the app out
+
+Changing or resetting the password on any client ends all mobile sessions (`401` on the next call). Signing in on an 11th device ends the least recently used session.
 
 ### `POST /devices`
 

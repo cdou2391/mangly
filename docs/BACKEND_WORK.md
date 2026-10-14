@@ -1,6 +1,20 @@
 # Backend work in MangaPulse
 
-Required before Mangly can sign in or receive push. Each item is scoped to be a separate PR against `cdou2391/MangaPulse`.
+Required before Mangly can sign in or receive push.
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Bearer support in `get_current_user` | **Done**, MangaPulse branch `feat/mobile-auth` (commit "Accept bearer tokens in get_current_user") |
+| 2 | Refresh tokens and `/auth/mobile/*` | **Done**, same branch (commit "Add mobile sign-in with rotating refresh tokens"). Not yet merged or deployed |
+| 3 | Devices and push delivery | Not started |
+
+The sections below are the original specification. Where the implementation differs, the differences are listed here:
+
+- Logout is authenticated by the refresh token and needs no access token.
+- A 10 second reuse leeway was added so a lost refresh response followed by a retry does not sign the user out (`MOBILE_REFRESH_REUSE_LEEWAY_SECONDS`).
+- Access tokens carry the session id (`fid`), so logout and reuse detection invalidate them immediately instead of at expiry.
+- Sessions have a 90 day absolute lifetime and a cap of 10 per account.
+- `verify_password` now returns `False` for input over 72 bytes (bcrypt 5 raised, which was a 500 on the web login as well).
 
 ## 1. Bearer support in `get_current_user`
 

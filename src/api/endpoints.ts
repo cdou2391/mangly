@@ -29,7 +29,9 @@ export const authApi = {
   async logout() {
     const refresh = await tokenStore.getRefreshToken();
     try {
-      if (refresh) await api.post("/auth/mobile/logout", { refresh_token: refresh });
+      // Authenticated by the refresh token itself, so it works with an expired access token and
+      // must not trigger a refresh (which would rotate the very token being revoked).
+      if (refresh) await api.post("/auth/mobile/logout", { refresh_token: refresh }, { auth: false });
     } finally {
       await dropSession();
     }
