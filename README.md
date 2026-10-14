@@ -25,6 +25,14 @@ Mangly is a **client only**. It talks to a MangaPulse backend over HTTPS and own
 
 The backend changes are specified in [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.md). Until they ship, sign-in returns 404 from `/auth/mobile/login`.
 
+## Initial APK (splash + home empty state)
+
+The first installable build shows only the splash screen and an empty home screen. It does no sign-in and makes no network calls. It is selected at build time with `EXPO_PUBLIC_SHELL_ONLY=1`.
+
+**Get it:** push to a `claude/**` branch, a `v*` tag, or run **Actions → Build APK → Run workflow**, then download `mangly-shell-apk` from the run page and sideload the `.apk`.
+
+**Signing:** the APK is signed with the Expo debug keystore. That is fine for testing. Do not distribute it, and expect to uninstall it before installing a properly signed build later.
+
 ## Run it
 
 Requirements: Node 22+, Android Studio (emulator and SDK) or a USB-connected phone, a running MangaPulse backend.
@@ -34,6 +42,7 @@ cp .env.example .env          # set EXPO_PUBLIC_API_URL
 npm install
 npm run android               # builds and installs a development build
 npm run dev                   # later: start Metro for the installed dev build
+# add EXPO_PUBLIC_SHELL_ONLY=1 to .env to run the shell-only variant locally
 ```
 
 `EXPO_PUBLIC_API_URL` must include `/api/v1`. From the Android emulator, the host machine is `10.0.2.2`. Release builds must use `https://`.

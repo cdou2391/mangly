@@ -1,0 +1,69 @@
+name: Build APK
+
+# Builds an installable Android APK of the initial shell (splash + home empty state)
+# on a GitHub-hosted runner, which already has the Android SDK. The APK is uploaded as a run artifact.
+on:
+  push:
+    branches: ["claude/**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_PUBLIC_SHELL_ONLY: "1"
+  EXPO_NO_TELEMETRY: "1"
+  CI: "1"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - run: npm ci
+      - run: npm run check
+
+      - name: Generate native project
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Assemble release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
+
+      - name: Inspect APK
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          ls -lh "$APK"
+          sha256sum "$APK"
+          AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2
+          "$AAPT" dump badging "$APK" | grep -E "^(package|launchable-activity|uses-permission)" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mangly-shell-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
