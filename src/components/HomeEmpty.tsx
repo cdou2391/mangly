@@ -9,7 +9,7 @@ export function HomeEmpty() {
     <Screen>
       <View style={s.center}>
         <Image
-          source={require("../../assets/splash-icon.png")}
+          source={require("../../assets/logo.png")}
           style={s.logo}
           contentFit="contain"
           accessibilityLabel="Mangly logo"

@@ -32,6 +32,8 @@ Every push to a `claude/**` branch or a `v*` tag builds an APK in GitHub Actions
 - **Full app (default):** sign-in, library, search, updates, alerts, settings. Needs the MangaPulse mobile auth endpoints deployed (`feat/mobile-auth`, merged as MangaPulse PR #20).
 - **Shell:** only the splash and the empty home screen, no network. Set `EXPO_PUBLIC_SHELL_ONLY: "1"` in `.github/workflows/build-apk.yml`.
 
+**Splash screen:** Android 12+ only lets the native splash show a small icon on a flat colour, so the artwork (`assets/splash-art.jpg`) is drawn by the app itself. The native splash is a plain dark screen that hands over to the full-screen artwork (`src/components/SplashOverlay.tsx`) as soon as it has loaded; the artwork stays for at least 1.4 s, then fades out once the session is restored. To change it, replace `assets/splash-art.jpg` (portrait, about 1080x1920 or larger; it is scaled to cover the screen, so the edges may be trimmed on tall phones).
+
 **Signing:** the APK is signed with the Expo debug keystore. That is fine for testing. Do not distribute it, and expect to uninstall it before installing a properly signed build later.
 
 ## Run it

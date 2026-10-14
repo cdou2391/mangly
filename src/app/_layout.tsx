@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { View } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -7,22 +8,18 @@ import { AuthProvider, useAuth } from "@/auth/AuthContext";
 import { SHELL_ONLY } from "@/config";
 import { registerForPush } from "@/push/register";
 import { Loading } from "@/components/ui";
+import { SplashOverlay } from "@/components/SplashOverlay";
 
-// Keep the native splash up until the first real screen is ready to draw.
+// Keep the native splash up until the splash artwork (SplashOverlay) has loaded and taken over.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
 });
 
-function Routes() {
+function Routes({ ready }: { ready: boolean }) {
   const { state } = useAuth();
   const signedIn = state.status === "signedIn";
-  const ready = state.status !== "loading";
-
-  useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => {});
-  }, [ready]);
 
   useEffect(() => {
     if (signedIn) registerForPush().catch((e) => console.warn("Push registration failed", e));
@@ -43,11 +40,26 @@ function Routes() {
   );
 }
 
+// The routes render underneath the splash artwork while the session is restored, so the first real
+// screen is already in place when the artwork fades out.
+function FullApp() {
+  const { state } = useAuth();
+  const ready = state.status !== "loading";
+  return (
+    <View style={{ flex: 1 }}>
+      <Routes ready={ready} />
+      <SplashOverlay appReady={ready} />
+    </View>
+  );
+}
+
 function Shell() {
-  useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {});
-  }, []);
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }} />
+      <SplashOverlay appReady />
+    </View>
+  );
 }
 
 export default function RootLayout() {
@@ -63,7 +75,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <StatusBar style="auto" />
-        <Routes />
+        <FullApp />
       </AuthProvider>
     </QueryClientProvider>
   );
