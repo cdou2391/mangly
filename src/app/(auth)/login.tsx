@@ -49,11 +49,7 @@ export default function Login() {
   }
 
   return (
-    <AuthScreen>
-      <View style={{ flex: 1, justifyContent: "center", minHeight: 250, paddingVertical: 8 }}>
-        <BrandHeader />
-      </View>
-
+    <AuthScreen header={<BrandHeader />} footer={<AuthFooter />}>
       <View style={{ gap: 14 }}>
         <AuthField
           icon="mail-outline"
@@ -109,7 +105,6 @@ export default function Login() {
 
       <OrDivider />
       <AuthButton variant="secondary" title="Create account" icon="person-outline" onPress={() => router.push("/register")} />
-      <AuthFooter />
     </AuthScreen>
   );
 }

@@ -1,6 +1,7 @@
 import { forwardRef, useState, type ComponentProps } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useAuthLayout } from "./AuthScreen";
 import { auth } from "./authTheme";
 
 type Props = TextInputProps & {
@@ -18,6 +19,7 @@ export const AuthField = forwardRef<TextInput, Props>(function AuthField(
   { icon, label, error, hint, revealable, secureTextEntry, onFocus, onBlur, ...rest },
   ref,
 ) {
+  const { ensureFocusedVisible } = useAuthLayout();
   const [focused, setFocused] = useState(false);
   const [shown, setShown] = useState(false);
   const hidden = revealable ? !shown : secureTextEntry;
@@ -36,6 +38,7 @@ export const AuthField = forwardRef<TextInput, Props>(function AuthField(
           style={styles.input}
           onFocus={(e) => {
             setFocused(true);
+            ensureFocusedVisible();
             onFocus?.(e);
           }}
           onBlur={(e) => {

@@ -1,3 +1,4 @@
+import { Keyboard, Platform, StyleSheet, TextInput } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
@@ -107,4 +108,67 @@ it("goes to registration from Create account", async () => {
   await renderLogin();
   await fireEvent.press(screen.getByRole("button", { name: "Create account" }));
   expect(router.push).toHaveBeenCalledWith("/register");
+});
+
+describe("with the keyboard", () => {
+  // Capture the listeners the screen registers so the test can open and close the keyboard.
+  let handlers: Record<string, (e?: unknown) => void>;
+  beforeEach(() => {
+    handlers = {};
+    jest.replaceProperty(Platform, "OS", "android"); // the app only ships on Android; jest defaults to iOS
+    jest.spyOn(Keyboard, "addListener").mockImplementation(((event: string, cb: (e?: unknown) => void) => {
+      handlers[event] = cb;
+      return { remove: jest.fn() };
+    }) as never);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  const openKeyboard = (height = 320) =>
+    act(async () => handlers.keyboardDidShow({ endCoordinates: { height } }));
+  const closeKeyboard = () => act(async () => handlers.keyboardDidHide());
+  const bottomPadding = () =>
+    StyleSheet.flatten(screen.getByTestId("auth-scroll").props.contentContainerStyle).paddingBottom as number;
+
+  it("does not measure or scroll after the screen has been unmounted", async () => {
+    jest.useFakeTimers();
+    try {
+      const spy = jest.spyOn(TextInput.State, "currentlyFocusedInput");
+      const view = await renderLogin();
+      await openKeyboard(); // schedules the "scroll the field into view" measurement
+      await view.unmount(); // the user navigates away before it fires
+      await act(async () => void jest.advanceTimersByTime(1000));
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("shows the full header and footer while the keyboard is closed", async () => {
+    await renderLogin();
+    expect(screen.getByText("MANGA LIVES HERE")).toBeTruthy();
+    expect(screen.getByText("BELONG")).toBeTruthy();
+  });
+
+  it("collapses the header and drops the footer when the keyboard opens, and restores them after", async () => {
+    await renderLogin();
+    await openKeyboard();
+    expect(screen.queryByText("MANGA LIVES HERE")).toBeNull();
+    expect(screen.queryByText("BELONG")).toBeNull();
+    // the form itself stays put
+    expect(email()).toBeTruthy();
+    expect(logIn()).toBeTruthy();
+
+    await closeKeyboard();
+    expect(screen.getByText("MANGA LIVES HERE")).toBeTruthy();
+    expect(screen.getByText("BELONG")).toBeTruthy();
+  });
+
+  it("reserves room under the content for the keyboard so the form can scroll clear of it", async () => {
+    await renderLogin();
+    const closed = bottomPadding();
+    await openKeyboard(320);
+    expect(bottomPadding()).toBeGreaterThanOrEqual(320);
+    await closeKeyboard();
+    expect(bottomPadding()).toBe(closed);
+  });
 });

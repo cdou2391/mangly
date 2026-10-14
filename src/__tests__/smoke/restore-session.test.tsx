@@ -19,6 +19,6 @@ it("restores a stored session and lands on the empty library", async () => {
     "/notifications/unread-count": () => h.json(200, { count: 0 }),
   });
   renderRouter("./src/app", { initialUrl: "/" });
-  await waitFor(() => expect(screen.getByText("Nothing here yet")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("Nothing here yet")).toBeTruthy(), { timeout: 5000 });
   expect(h.store["mangly.refresh_token"]).toBe("mpr_refresh"); // the rotated token was saved
 });

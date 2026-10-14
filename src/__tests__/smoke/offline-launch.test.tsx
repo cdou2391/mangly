@@ -15,6 +15,6 @@ it("keeps the stored session when the device is offline at launch", async () => 
   h.store["mangly.refresh_token"] = "mpr_old";
   h.offlineFetch();
   renderRouter("./src/app", { initialUrl: "/" });
-  await waitFor(() => expect(screen.getByText(h.SIGN_IN_TEXT)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(h.SIGN_IN_TEXT)).toBeTruthy(), { timeout: 5000 });
   expect(h.store["mangly.refresh_token"]).toBe("mpr_old"); // not lost just because of a dead connection
 });

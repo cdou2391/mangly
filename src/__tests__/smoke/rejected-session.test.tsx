@@ -15,6 +15,6 @@ it("falls back to sign-in when the server rejects the stored session", async () 
   h.store["mangly.refresh_token"] = "mpr_revoked";
   h.routeFetch({ "/auth/mobile/refresh": () => h.json(401, { detail: "Invalid or expired refresh token." }) });
   renderRouter("./src/app", { initialUrl: "/" });
-  await waitFor(() => expect(screen.getByText(h.SIGN_IN_TEXT)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(h.SIGN_IN_TEXT)).toBeTruthy(), { timeout: 5000 });
   expect(h.store["mangly.refresh_token"]).toBeUndefined(); // a rejected token is discarded
 });

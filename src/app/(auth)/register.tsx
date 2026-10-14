@@ -57,11 +57,7 @@ export default function Register() {
   }
 
   return (
-    <AuthScreen>
-      <View style={{ flex: 1, justifyContent: "center", minHeight: 200, paddingVertical: 8 }}>
-        <BrandHeader compact />
-      </View>
-
+    <AuthScreen header={<BrandHeader compact />} footer={<AuthFooter />}>
       <View style={{ gap: 14 }}>
         <AuthField
           icon="person-outline"
@@ -122,7 +118,6 @@ export default function Register() {
 
       <OrDivider />
       <AuthButton variant="secondary" title="I already have an account" icon="log-in-outline" onPress={() => router.replace("/login")} />
-      <AuthFooter />
     </AuthScreen>
   );
 }

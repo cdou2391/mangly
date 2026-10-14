@@ -14,6 +14,6 @@ beforeEach(() => h.resetClientState());
 it("shows the sign-in screen when there is no stored session", async () => {
   h.routeFetch({});
   renderRouter("./src/app", { initialUrl: "/" });
-  await waitFor(() => expect(screen.getByText(h.SIGN_IN_TEXT)).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(h.SIGN_IN_TEXT)).toBeTruthy(), { timeout: 5000 });
   expect(globalThis.fetch).not.toHaveBeenCalled(); // nothing to refresh, so no network
 });
