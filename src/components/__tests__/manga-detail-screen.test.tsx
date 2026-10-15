@@ -173,7 +173,7 @@ describe("changing the title", () => {
 describe("when the server cannot be reached", () => {
   it("shows the saved title instead of an error", async () => {
     list.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { gcTime: 0 } } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
     client.setQueryData(["tracked"], [item()]);
     await renderDetail(client);
     await waitFor(() => expect(list).toHaveBeenCalled()); // the refresh was tried and failed

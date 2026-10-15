@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { View } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
@@ -6,7 +5,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
 import { SHELL_ONLY } from "@/config";
-import { registerForPush } from "@/push/register";
+import { AlertsEffects } from "@/alerts";
 import { Loading } from "@/components/ui";
 import { SplashOverlay } from "@/components/SplashOverlay";
 
@@ -22,25 +21,24 @@ function Routes({ ready }: { ready: boolean }) {
   const signedIn = state.status === "signedIn";
   const unreachable = state.status === "unreachable";
 
-  useEffect(() => {
-    if (signedIn) registerForPush().catch((e) => console.warn("Push registration failed", e));
-  }, [signedIn]);
-
   if (!ready) return <Loading />;
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Protected guard={signedIn}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="manga/[id]" />
-      </Stack.Protected>
-      <Stack.Protected guard={unreachable}>
-        <Stack.Screen name="offline" />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn && !unreachable}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
-    </Stack>
+    <>
+      {signedIn ? <AlertsEffects /> : null}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="manga/[id]" />
+        </Stack.Protected>
+        <Stack.Protected guard={unreachable}>
+          <Stack.Screen name="offline" />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn && !unreachable}>
+          <Stack.Screen name="(auth)" />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }
 

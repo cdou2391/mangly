@@ -1,12 +1,12 @@
 # Backend work in MangaPulse
 
-Required before Mangly can sign in or receive push.
+Items 1–2 are required before Mangly can sign in; item 3 is optional (instant push).
 
 | # | Item | Status |
 |---|---|---|
 | 1 | Bearer support in `get_current_user` | **Done**, MangaPulse branch `feat/mobile-auth` (commit "Accept bearer tokens in get_current_user") |
 | 2 | Refresh tokens and `/auth/mobile/*` | **Done**, same branch (commit "Add mobile sign-in with rotating refresh tokens"). Not yet merged or deployed |
-| 3 | Devices and push delivery | Not started |
+| 3 | Devices and push delivery | Not needed for now (optional, for instant push) |
 
 The sections below are the original specification. Where the implementation differs, the differences are listed here:
 
@@ -54,7 +54,9 @@ Acceptance
 - Tests for rotation, reuse detection, expiry, logout, and password-change revocation.
 - A daily Celery Beat task deletes refresh tokens expired more than 7 days ago.
 
-## 3. Devices and push delivery
+## 3. Devices and push delivery (optional: not used by the app today)
+
+> The app currently gets new-chapter notifications from a background check on the phone and needs none of this. This section is the design for instant server push, should it be wanted later (see `ARCHITECTURE.md`).
 
 New table `devices`: `id`, `user_id` (FK, indexed), `expo_push_token` (unique), `platform`, `device_name`, `created_at`, `last_seen_at`.
 

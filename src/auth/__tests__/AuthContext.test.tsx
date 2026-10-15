@@ -24,7 +24,7 @@ jest.mock("@/cache/store", () => ({
   startPersisting: jest.fn(() => ({ flush: jest.fn(), stop: jest.fn() })),
 }));
 jest.mock("@/api/endpoints", () => ({ authApi: { login: jest.fn(), logout: jest.fn(async () => {}) } }));
-jest.mock("@/push/register", () => ({ unregisterPush: jest.fn(async () => {}) }));
+jest.mock("@/alerts", () => ({ stopAlerts: jest.fn(async () => {}) }));
 
 const restore = restoreSession as jest.Mock;
 const pingServer = ping as jest.Mock;

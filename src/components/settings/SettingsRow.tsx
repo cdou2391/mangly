@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { palette } from "@/theme";
 
@@ -46,6 +46,45 @@ export function SettingsRow({
   );
 }
 
+/** A row with an on/off switch. `value` null means the saved choice has not been read yet; the switch is disabled until then. */
+export function SettingsSwitchRow({
+  icon,
+  label,
+  hint,
+  value,
+  busy,
+  onChange,
+  last,
+}: {
+  icon: IconName;
+  label: string;
+  hint?: string;
+  value: boolean | null;
+  busy?: boolean;
+  onChange: (next: boolean) => void;
+  last?: boolean;
+}) {
+  return (
+    <View style={[styles.row, !last && styles.divider, { paddingVertical: 10 }]}>
+      <View style={styles.icon}>
+        <Ionicons name={icon} size={18} color={palette.text} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.label}>{label}</Text>
+        {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      </View>
+      <Switch
+        accessibilityLabel={label}
+        value={value === true}
+        disabled={value === null || busy}
+        onValueChange={onChange}
+        trackColor={{ false: "#2A2A2E", true: palette.primaryDeep }}
+        thumbColor={value ? palette.primary : "#8E8E93"}
+      />
+    </View>
+  );
+}
+
 /** A titled group of rows in one rounded card. */
 export function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -64,4 +103,5 @@ const styles = StyleSheet.create({
   icon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: palette.raised },
   label: { flex: 1, color: palette.text, fontSize: 15.5, fontWeight: "600" },
   value: { color: palette.muted, fontSize: 14.5 },
+  hint: { color: palette.faint, fontSize: 12.5, marginTop: 2 },
 });

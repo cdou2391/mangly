@@ -6,7 +6,7 @@ import { ping, restoreSession, setSessionListener } from "@/api/client";
 import { setOnline, useOnline } from "@/api/reachability";
 import type { User } from "@/api/types";
 import { clearSnapshot, isUsable, loadSnapshot, restoreInto, startPersisting, type Snapshot } from "@/cache/store";
-import { unregisterPush } from "@/push/register";
+import { stopAlerts } from "@/alerts";
 
 /**
  * - loading: restoring the stored session
@@ -194,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await unregisterPush().catch(() => {});
+    await stopAlerts().catch(() => {});
     await authApi.logout().catch(() => {});
   }, []);
 

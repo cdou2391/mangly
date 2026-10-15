@@ -8,7 +8,7 @@
 | 2 | Extend MangaPulse in place (no fork) | Avoids two diverging backends | Mobile auth ships through MangaPulse's release cycle |
 | 3 | Expo / React Native, TypeScript | Reuses TanStack Query, zod and the API types from the web frontend | Native modules need development builds, not Expo Go |
 | 4 | Bearer + refresh tokens instead of cookies | The web session is an `HttpOnly`, `SameSite=Strict` cookie; native clients have no cookie jar contract | New token endpoints and a revocation store on the backend |
-| 5 | Expo Push Service for delivery | One server call covers FCM; no Firebase SDK code in the backend | Third-party hop (`exp.host`); notification content passes through Expo |
+| 5 | New-chapter notifications come from a background check on the phone (WorkManager), not from server push | Needs no Expo or Firebase account and no MangaPulse change: it reads the alerts the server already creates and de-duplicates | Not instant: Android decides when the check runs (every 15 minutes at the soonest, often much later); see "New-chapter notifications" |
 
 ## Layout
 
@@ -20,7 +20,7 @@ src/
     manga/[id]    title detail
   api/            fetch client, endpoint functions, response types
   auth/           token storage, AuthProvider
-  push/           permission, token fetch, backend registration
+  alerts/         new-chapter notifications: background check, permission, Settings switch
   components/     shared UI
   theme.ts        light/dark tokens
 ```
@@ -44,19 +44,25 @@ Logout    POST /auth/mobile/logout {refresh_token}   -> revoke
 - The backend must treat reuse of an already-rotated refresh token as theft and revoke that token family (see `BACKEND_WORK.md`).
 - Android backup is disabled (`allowBackup: false`) so credentials never leave the device through backup.
 
-## Push notifications
+## New-chapter notifications
 
 ```
-App start (signed in)  -> permission -> getExpoPushTokenAsync -> POST /devices
-Backend (Celery)       -> new chapter detected -> existing notification row created
-                       -> for each of the user's devices: POST https://exp.host/--/api/v2/push/send
-Device                 -> notification tap -> app opens (chapter link in data payload)
-Logout                 -> DELETE /devices/{id}
+Backend (Celery)   -> new chapter found -> one alert row per user and chapter (already de-duplicated; only for titles with alerts on)
+Phone (WorkManager)-> every ~15+ min, with network: renew session -> GET /notifications?unread_only=true
+                   -> unread alerts newer than the last one seen -> local notification (one each, or a summary past 3)
+Tap                -> app opens on Updates
 ```
 
-- One push per chapter per user, not per source. Sending hooks into the same place that already de-duplicates in-app notifications.
-- The backend removes a device when Expo returns `DeviceNotRegistered`.
-- Payload carries IDs and a chapter URL only. No tokens, no email.
+- **No server push.** `expo-background-task` (Android WorkManager) wakes the app; `src/alerts/check.ts` does one check; `expo-notifications` shows a local notification. No Expo or Firebase account, no device registry, no backend change.
+- **Runs without the app open.** The system starts the app headless, so the task is defined when the bundle loads: `index.ts` (the entry point, `main` in `package.json`) imports `src/alerts/task.ts` before `expo-router/entry`. A test guards both.
+- **What counts as new.** `seenId`, the newest alert already shown, kept per user in SecureStore with the on/off choice. A check notifies for unread alerts above it, then advances it. The first check only sets the baseline (the backlog is not news). Alerts loaded from the server while the app is open also advance it, so nothing is announced twice. Alerts already read (including by reading the chapter) never notify. Without permission nothing is shown, and what was missed is not replayed later.
+- **Switch.** Settings → Notifications. On first launch with something in the library the app asks for the Android 13+ permission once; the answer is remembered. If the system will not ask again, switching on opens the system settings. Sign-out cancels the check, forgets everything and clears shown notifications; a different user on the device starts fresh.
+- **The check never runs while the app is open** (the app shows the alerts itself).
+- **Session.** Each check renews the session like a launch does, which rotates the refresh token. A check killed between the server rotating the token and the app saving it could leave a token the server no longer accepts after its 10 s leeway; WorkManager gives a run minutes, so this is rare, and the result would be a sign-in prompt, not data loss.
+
+**Limits to expect.** Android treats the interval as a minimum and batches work: Doze and battery saver can delay checks for hours, some manufacturers stop background work for apps that are not used, and "Force stop" cancels it until the app is opened again. Notifications therefore arrive minutes to hours after a chapter is detected, never instantly.
+
+**If instant delivery is wanted later:** server push through Expo's push service (FCM underneath) needs an Expo account (EAS project id), a Firebase project with FCM credentials, a devices table with `POST /devices` and `DELETE /devices/{id}`, and a sender hooked into the alert creation. It would replace the background check (or run beside it) without changing the alerts model.
 
 ## Security notes
 
@@ -67,7 +73,7 @@ Logout                 -> DELETE /devices/{id}
 | Cleartext traffic | Release builds require `https://`; `10.0.2.2` HTTP is for local development only |
 | Password change | Backend already bumps `token_version`; refresh tokens must be revoked on the same event |
 | Per-IP rate limits and carrier NAT | Mobile endpoints need per-account limits in addition to per-IP (backend) |
-| Push token as an identifier | Treat as a secret per device; unregister on logout; drop on `DeviceNotRegistered` |
+| Notification state on a shared device | The alerts state (choice, user, `seenId`) is per user and deleted on sign-out; shown notifications are dismissed on sign-out |
 
 ## Out of scope for the first release
 

@@ -4,6 +4,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { useQuery } from "@tanstack/react-query";
+import { useAlertSetting } from "@/alerts";
 import { trackingApi } from "@/api/endpoints";
 import { useOnline } from "@/api/reachability";
 import { useAuth } from "@/auth/AuthContext";
@@ -12,7 +13,7 @@ import { Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { LibraryStats } from "@/components/settings/LibraryStats";
 import { ProfileCard } from "@/components/settings/ProfileCard";
-import { SettingsGroup, SettingsRow } from "@/components/settings/SettingsRow";
+import { SettingsGroup, SettingsRow, SettingsSwitchRow } from "@/components/settings/SettingsRow";
 import { countByFilter } from "@/utils/library";
 import { palette } from "@/theme";
 
@@ -22,6 +23,7 @@ export default function Settings() {
   const { state, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
   const online = useOnline();
+  const alerts = useAlertSetting();
   // The library list is already kept fresh by every screen that changes it, so the numbers are counted from it
   // rather than from a separate stats request that would go stale.
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
@@ -64,6 +66,18 @@ export default function Settings() {
               <LibraryStats counts={counts} />
             )}
           </View>
+
+          <SettingsGroup title="NOTIFICATIONS">
+            <SettingsSwitchRow
+              icon="notifications-outline"
+              label="New chapter notifications"
+              hint="Checked in the background, so they can arrive a while after a chapter is out."
+              value={alerts.on}
+              busy={alerts.busy}
+              onChange={(v) => void alerts.set(v)}
+              last
+            />
+          </SettingsGroup>
 
           <SettingsGroup title="HELP & ABOUT">
             <SettingsRow icon={online ? "cloud-done-outline" : "cloud-offline-outline"} label="Connection" value={online ? "Online" : "Offline"} warn={!online} />

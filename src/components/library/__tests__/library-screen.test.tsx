@@ -234,7 +234,7 @@ describe("when there is nothing to show", () => {
 
   it("shows the saved library, not an error, when a refresh cannot reach the server", async () => {
     list.mockRejectedValue(new Error("Can't reach MangaPulse. Check your connection and try again later."));
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     client.setQueryData(["tracked"], SAMPLE);
     await render(
       <QueryClientProvider client={client}>

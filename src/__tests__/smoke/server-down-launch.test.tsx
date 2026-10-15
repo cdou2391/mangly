@@ -8,7 +8,7 @@ import * as h from "@/test-utils/smoke";
 
 jest.mock("expo-secure-store", () => require("@/test-utils/mocks").secureStoreMock());
 jest.mock("expo-splash-screen", () => require("@/test-utils/mocks").splashMock());
-jest.mock("@/push/register", () => require("@/test-utils/mocks").pushMock());
+jest.mock("@/alerts", () => require("@/test-utils/mocks").alertsMock());
 
 beforeEach(() => h.resetClientState());
 

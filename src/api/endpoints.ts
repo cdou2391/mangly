@@ -2,7 +2,6 @@ import { api, applySession, dropSession } from "./client";
 import { tokenStore } from "@/auth/tokenStore";
 import type {
   AppNotification,
-  Device,
   RecentChapter,
   RegisterRequest,
   SearchCandidate,
@@ -62,10 +61,4 @@ export const notificationsApi = {
   markRead: (id: number) => api.patch<AppNotification>(`/notifications/${id}/read`),
   markAllRead: () => api.patch<unknown>("/notifications/read-all"),
   clearRead: () => api.delete<unknown>("/notifications/read"),
-};
-
-export const devicesApi = {
-  register: (expo_push_token: string, device_name?: string) =>
-    api.post<Device>("/devices", { expo_push_token, platform: "android", device_name }),
-  unregister: (id: number) => api.delete<void>(`/devices/${id}`),
 };

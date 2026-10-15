@@ -4,12 +4,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import Settings from "@/app/(tabs)/settings";
+import { useAlertSetting } from "@/alerts";
 import { useAuth } from "@/auth/AuthContext";
 import { trackingApi } from "@/api/endpoints";
 import { setOnline } from "@/api/reachability";
 import type { ReadingStatus, TrackedManga, User } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({ trackingApi: { list: jest.fn() } }));
+jest.mock("@/alerts", () => ({ useAlertSetting: jest.fn() }));
 jest.mock("@/auth/AuthContext", () => ({ useAuth: jest.fn() }));
 jest.mock("@/config", () => ({ WEB_URL: "https://web.test" }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { version: "1.2.3" } } }));
@@ -17,6 +19,8 @@ jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({}
 
 const list = trackingApi.list as jest.Mock;
 const mockedUseAuth = useAuth as jest.Mock;
+const mockedAlerts = useAlertSetting as jest.Mock;
+let setAlerts: jest.Mock;
 
 const user = (over: Partial<User> = {}): User => ({
   id: 1, full_name: "Ada Lovelace", email: "ada@example.com", role: "user", is_active: true,
@@ -43,6 +47,8 @@ const renderSettings = () =>
 beforeEach(() => {
   jest.clearAllMocks();
   setOnline(true);
+  setAlerts = jest.fn();
+  mockedAlerts.mockReturnValue({ on: true, busy: false, set: setAlerts });
   signedIn();
   list.mockResolvedValue([tracked(1, "reading"), tracked(2, "reading"), tracked(3, "completed"), tracked(4, "plan_to_read")]);
 });
@@ -113,6 +119,39 @@ describe("help and about", () => {
   });
 });
 
+describe("notifications", () => {
+  it("has a switch for new chapter notifications, showing whether they are on", async () => {
+    await renderSettings();
+    expect((await screen.findByLabelText("New chapter notifications")).props.value).toBe(true);
+    mockedAlerts.mockReturnValue({ on: false, busy: false, set: setAlerts });
+    await renderSettings();
+    expect((await screen.findAllByLabelText("New chapter notifications")).at(-1)!.props.value).toBe(false);
+  });
+
+  it("turns them on and off", async () => {
+    await renderSettings();
+    const sw = await screen.findByLabelText("New chapter notifications");
+    await fireEvent(sw, "valueChange", false);
+    expect(setAlerts).toHaveBeenCalledWith(false);
+    await fireEvent(sw, "valueChange", true);
+    expect(setAlerts).toHaveBeenLastCalledWith(true);
+  });
+
+  it("is disabled until the saved choice is known, and while changing", async () => {
+    mockedAlerts.mockReturnValue({ on: null, busy: false, set: setAlerts });
+    await renderSettings();
+    expect((await screen.findByLabelText("New chapter notifications")).props.disabled).toBe(true);
+    mockedAlerts.mockReturnValue({ on: true, busy: true, set: setAlerts });
+    await renderSettings();
+    expect((await screen.findAllByLabelText("New chapter notifications")).at(-1)!.props.disabled).toBe(true);
+  });
+
+  it("says they are checked in the background, so late arrival is expected", async () => {
+    await renderSettings();
+    expect(await screen.findByText(/Checked in the background/)).toBeTruthy();
+  });
+});
+
 describe("the connection", () => {
   it("says Online when the server is reachable", async () => {
     await renderSettings();
@@ -131,7 +170,7 @@ describe("the connection", () => {
   it("still shows the library numbers from the saved copy while offline", async () => {
     setOnline(false);
     list.mockRejectedValue(new Error("offline"));
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     client.setQueryData(["tracked"], [tracked(1, "reading"), tracked(2, "completed")]);
     await render(
       <QueryClientProvider client={client}>

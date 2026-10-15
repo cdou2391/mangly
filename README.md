@@ -1,6 +1,6 @@
 # MangaPulse for Android
 
-Android app for [MangaPulse](https://github.com/cdou2391/MangaPulse): track manga across MangaRead and WeebCentral and get a push notification when a new chapter drops.
+Android app for [MangaPulse](https://github.com/cdou2391/MangaPulse): track manga across MangaRead and WeebCentral and get a notification when a new chapter drops.
 
 The app is shown to users as **MangaPulse** (the code lives in the `mangly` repository). It is a **client only**. It talks to a MangaPulse backend over HTTPS and owns no scraping, database or scheduling logic.
 
@@ -10,7 +10,7 @@ The app is shown to users as **MangaPulse** (the code lives in the `mangly` repo
 | Navigation | Expo Router (file-based, `src/app`) |
 | Data | TanStack Query over a small `fetch` client (`src/api`) |
 | Auth | Bearer access token (memory) + rotating refresh token (Android Keystore via `expo-secure-store`) |
-| Push | `expo-notifications` + Expo Push Service (FCM underneath) |
+| Notifications | Background check on the phone (`expo-background-task`) + local notifications (`expo-notifications`); no push server |
 | Platform | Android only |
 
 > **Naming.** The launcher name is set by `name` in `app.json`. The Android package id (`com.cdou2391.mangly`), the Expo `slug` and the storage keys keep the original `mangly` name on purpose: changing the package id makes Android treat the app as a different one, so it could not be installed over an existing copy and would lose the saved login.
@@ -22,7 +22,7 @@ The app is shown to users as **MangaPulse** (the code lives in the `mangly` repo
 | Sign in / register / sign out | Implemented. Backend merged in MangaPulse PR #20; **must be deployed** for sign-in to work |
 | Library, title detail, status and progress edits | Implemented (existing API) |
 | Updates feed (alerts and new chapters in one list), search and track | Implemented (existing API) |
-| Push notifications | App side implemented. **Needs the MangaPulse device endpoints and sender** |
+| New-chapter notifications | Implemented (background check, no backend change). Delivery is delayed by Android, see ARCHITECTURE.md |
 | AI recommendations, admin | Not started |
 
 The backend changes are specified in [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.md). Until the MangaPulse release containing PR #20 is deployed, sign-in returns 404 from `/auth/mobile/login`.
@@ -52,7 +52,7 @@ npm run dev                   # later: start Metro for the installed dev build
 
 `EXPO_PUBLIC_API_URL` must include `/api/v1`. From the Android emulator, the host machine is `10.0.2.2`. Release builds must use `https://`.
 
-Push notifications need a **development or release build** and a physical device. Expo Go and emulators cannot receive them.
+Notifications need a **development or release build** (the background task is native code); Expo Go does not include it. Delivery depends on Android's background scheduling, so test on a physical device and allow 15+ minutes.
 
 ## Commands
 
@@ -65,15 +65,15 @@ Push notifications need a **development or release build** and a physical device
 ## Build and release
 
 ```bash
-npx eas-cli@latest init                       # once: creates the EAS project, writes extra.eas.projectId
+npx eas-cli@latest init                       # once: creates the EAS project (only needed for EAS builds)
 npx eas-cli@latest build -p android --profile preview      # installable APK
 npx eas-cli@latest build -p android --profile production   # AAB for Google Play
 ```
 
-For push, upload an FCM V1 service-account key to EAS (`eas credentials`) and add `google-services.json` per the Expo push setup guide.
+Notifications need no credentials. (Server push would: see "If instant delivery is wanted later" in the architecture doc.)
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design, auth flow, push flow, security decisions
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design, auth flow, notifications, security decisions
 - [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) — every endpoint the app calls, existing and new
 - [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.md) — changes required in MangaPulse, with acceptance criteria

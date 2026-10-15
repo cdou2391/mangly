@@ -129,13 +129,6 @@ export interface AppNotification {
   manga: Manga;
 }
 
-export interface Device {
-  id: number;
-  platform: "android";
-  device_name: string | null;
-  created_at: string;
-}
-
 export interface RegisterRequest {
   full_name: string;
   email: string;

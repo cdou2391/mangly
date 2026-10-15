@@ -17,7 +17,8 @@ export const splashMock = () => ({
   hideAsync: jest.fn(async () => {}),
 });
 
-export const pushMock = () => ({
-  registerForPush: jest.fn(async () => {}),
-  unregisterPush: jest.fn(async () => {}),
+export const alertsMock = () => ({
+  AlertsEffects: () => null,
+  stopAlerts: jest.fn(async () => {}),
+  useAlertSetting: () => ({ on: false, busy: false, set: jest.fn() }),
 });
