@@ -22,3 +22,13 @@ describe("describeError", () => {
     expect(describeError("weird", "search")).toBe("Something went wrong.");
   });
 });
+
+describe("describeError when registering", () => {
+  it("words the rate limit and server errors for someone creating an account", () => {
+    expect(describeError(new ApiError(429, "Rate limit exceeded: 5 per 1 minute"), "register")).toBe("Too many attempts. Wait a minute and try again.");
+    expect(describeError(new ApiError(500, "Internal server error"), "register")).toMatch(/couldn't create your account/);
+  });
+  it("keeps the server's words for a taken email", () => {
+    expect(describeError(new ApiError(409, "An account with this email already exists."), "register")).toBe("An account with this email already exists.");
+  });
+});

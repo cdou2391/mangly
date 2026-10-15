@@ -1,27 +1,16 @@
 import { useRef, useState } from "react";
 import { Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
-import { z } from "zod";
 import { authApi } from "@/api/endpoints";
+import { describeError } from "@/api/errors";
 import { useAuth } from "@/auth/AuthContext";
+import { validateRegistration } from "@/auth/registration";
 import { AuthButton } from "@/components/auth/AuthButton";
 import { AuthField } from "@/components/auth/AuthField";
 import { AuthFooter, OrDivider } from "@/components/auth/AuthFooter";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { BrandHeader } from "@/components/auth/BrandHeader";
 import { auth } from "@/components/auth/authTheme";
-
-// Mirrors the backend rules: min length, at least one letter and one digit, max 72 bytes (bcrypt).
-const schema = z.object({
-  full_name: z.string().trim().min(1, "Enter your name.").max(255),
-  email: z.string().trim().email("Enter a valid email."),
-  password: z
-    .string()
-    .min(8, "At least 8 characters.")
-    .max(72, "At most 72 characters.")
-    .regex(/[A-Za-z]/, "Include a letter.")
-    .regex(/\d/, "Include a number."),
-});
 
 export default function Register() {
   const { signIn } = useAuth();
@@ -31,25 +20,36 @@ export default function Register() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const created = useRef<{ email: string; password: string } | null>(null); // the account made by this screen, if any
   const inFlight = useRef(false); // a ref, not state: state can be stale if two submits land before a re-render
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   async function submit() {
     if (inFlight.current) return;
     setFormError(null);
-    const parsed = schema.safeParse(form);
-    if (!parsed.success) {
-      setErrors(Object.fromEntries(parsed.error.issues.map((i) => [String(i.path[0]), i.message])));
+    const checked = validateRegistration(form);
+    if (!checked.ok) {
+      setErrors(checked.errors);
       return;
     }
+    const { data } = checked;
     setErrors({});
     inFlight.current = true;
     setBusy(true);
+    let accountExists = false; // set once this attempt knows the account is there, so a later failure is about signing in
     try {
-      await authApi.register(parsed.data);
-      await signIn(parsed.data.email, parsed.data.password);
+      // If the account was created but signing in failed, a second tap only signs in: registering again would be refused
+      // as a duplicate of the account that was just made.
+      accountExists = created.current?.email === data.email.toLowerCase() && created.current.password === data.password;
+      if (!accountExists) {
+        await authApi.register(data);
+        created.current = { email: data.email.toLowerCase(), password: data.password };
+        accountExists = true;
+      }
+      await signIn(data.email, data.password);
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : "Registration failed.");
+      const why = describeError(e, "register");
+      setFormError(accountExists ? `Your account is ready, but we couldn't sign you in. ${why} Tap Create account to try again, or log in.` : why);
     } finally {
       inFlight.current = false;
       setBusy(false);
