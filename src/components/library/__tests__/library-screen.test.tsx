@@ -129,12 +129,59 @@ it("opens the chapter link from the rail, or the title when there is no link", a
   expect(router.push).toHaveBeenCalledWith({ pathname: "/manga/[id]", params: { id: "3" } });
 });
 
-it("only shows chapters flagged as new in the rail, and hides the rail when there are none", async () => {
+it("only shows chapters flagged as new in the rail; with none it says you are all caught up", async () => {
   recentChapters.mockResolvedValue([recent(2, "Chainsaw Man", "191", null, false)]);
   await renderLibrary();
   await screen.findByText(/5 tracked/);
-  expect(screen.queryByText("NEW FOR YOU")).toBeNull();
-  expect(screen.queryByText(/new chapter/)).toBeNull();
+  expect(screen.queryByText(/\d+ new chapters?/)).toBeNull();
+  expect(screen.queryByRole("button", { name: /, new$/ })).toBeNull();
+  expect(await screen.findByText("You're all caught up!")).toBeTruthy();
+  expect(screen.getByText("NEW FOR YOU")).toBeTruthy();
+});
+
+describe("the all-caught-up message", () => {
+  it("is not shown while there is something new", async () => {
+    await renderLibrary();
+    await screen.findByText("NEW FOR YOU");
+    expect(screen.queryByText("You're all caught up!")).toBeNull();
+  });
+
+  it("is not shown before the new chapters have loaded", async () => {
+    let finish!: (v: RecentChapter[]) => void;
+    recentChapters.mockReturnValue(new Promise<RecentChapter[]>((resolve) => (finish = resolve)));
+    await renderLibrary();
+    await screen.findByText(/5 tracked/);
+    expect(screen.queryByText("You're all caught up!")).toBeNull();
+    await act(async () => finish([]));
+    expect(await screen.findByText("You're all caught up!")).toBeTruthy();
+  });
+
+  it("is not shown when the new chapters could not be loaded, because then we do not know", async () => {
+    recentChapters.mockRejectedValue(new Error("Network error."));
+    await renderLibrary();
+    await screen.findByText(/5 tracked/);
+    expect(screen.queryByText("You're all caught up!")).toBeNull();
+  });
+
+  it("is not shown when nothing is being followed yet", async () => {
+    list.mockResolvedValue([]);
+    recentChapters.mockResolvedValue([]);
+    await renderLibrary();
+    await screen.findByText("Nothing here yet");
+    expect(screen.queryByText("You're all caught up!")).toBeNull();
+    expect(screen.queryByText("NEW FOR YOU")).toBeNull();
+  });
+
+  it("appears as soon as the last new chapter is read", async () => {
+    recentChapters.mockResolvedValue([recent(2, "Chainsaw Man", "191", "https://x.test/191")]);
+    update.mockImplementation(async () => {
+      recentChapters.mockResolvedValue([]);
+      return {};
+    });
+    await renderLibrary();
+    await fireEvent.press(await screen.findByRole("button", { name: "Chainsaw Man, Ch. 191, new" }));
+    expect(await screen.findByText("You're all caught up!")).toBeTruthy();
+  });
 });
 
 it("opens a title from its row", async () => {

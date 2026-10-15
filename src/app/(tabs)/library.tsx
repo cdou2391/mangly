@@ -28,6 +28,8 @@ export default function Library() {
   const shown = filter === "all" ? sorted : sorted.filter((i) => i.reading_status === filter);
   const fresh = useMemo(() => (recent.data ?? []).filter((c) => c.is_new).slice(0, 10), [recent.data]);
   const unreadCount = unread.data?.count ?? 0;
+  // Only claim "all caught up" once both lists have loaded and there is something being followed; never while loading or after an error.
+  const caughtUp = recent.isSuccess && fresh.length === 0 && (items?.length ?? 0) > 0;
 
   const refresh = useCallback(async () => {
     await Promise.all([tracked.refetch(), recent.refetch(), unread.refetch()]);
@@ -63,7 +65,7 @@ export default function Library() {
   const header = (
     <>
       <ScreenHeader title="Library" subtitle={subtitle} right={bell} />
-      <NewRail chapters={fresh} onOpen={openChapter} onSeeAll={() => router.navigate("/updates")} />
+      <NewRail chapters={fresh} caughtUp={caughtUp} onOpen={openChapter} onSeeAll={() => router.navigate("/updates")} />
       {items && items.length > 0 ? <FilterChips value={filter} counts={counts} onChange={setFilter} /> : null}
     </>
   );
