@@ -3,10 +3,9 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Cover } from "@/components/Cover";
 import { shortChapter } from "@/utils/chapters";
 import { formatWhen, type FeedItem } from "@/utils/feed";
+import { sourceName } from "@/utils/sources";
 import { palette } from "@/theme";
 
-const SOURCES: Record<string, string> = { mangaread: "MangaRead", weebcentral: "WeebCentral" };
-const sourceName = (s: string) => SOURCES[s.toLowerCase()] ?? s;
 
 /** One release: red-edged with a NEW tag while unread, dimmed once read. */
 export function FeedRow({ item, now, onPress }: { item: FeedItem; now: Date; onPress: () => void }) {
