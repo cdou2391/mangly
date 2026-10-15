@@ -197,8 +197,9 @@ describe("opening a chapter", () => {
     await fireEvent.press(await row(/^Chainsaw Man\. Ch\. 190/));
     try {
       expect(markAlertRead).toHaveBeenCalledWith(12);
-      // the save is still in flight, so this is the screen's own (optimistic) view
-      expect(screen.getByRole("button", { name: /^Chainsaw Man\. Ch\. 190\..*\bread\b/ })).toBeTruthy();
+      // The save is still in flight, so this is the screen's own (optimistic) view. It is applied once any refresh already
+      // under way has been cancelled, which on a slow machine can be a moment after the press, so wait for it.
+      await waitFor(() => expect(screen.getByRole("button", { name: /^Chainsaw Man\. Ch\. 190\..*\bread\b/ })).toBeTruthy());
       expect(screen.getByRole("button", { name: /^Chainsaw Man\. Ch\. 191\..*\bnew\b/ })).toBeTruthy();
     } finally {
       await act(async () => answer()); // never leave the save hanging, even when an assertion above fails
