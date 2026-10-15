@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, useTheme } from "@/theme";
 
@@ -70,12 +71,18 @@ export function Empty({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
-export function ErrorNote({ message, onRetry }: { message: string; onRetry?: () => void }) {
+export function ErrorNote({ title = "Something went wrong", message, onRetry }: { title?: string; message: string; onRetry?: () => void }) {
   const t = useTheme();
   return (
-    <View style={s.empty}>
-      <Text style={{ color: t.danger, textAlign: "center" }}>{message}</Text>
-      {onRetry ? <Button title="Retry" variant="ghost" onPress={onRetry} /> : null}
+    <View style={s.empty} accessibilityLiveRegion="polite">
+      <Ionicons name="cloud-offline-outline" size={44} color={t.faint} />
+      <Text style={{ color: t.text, fontSize: 18, fontWeight: "800" }}>{title}</Text>
+      <Text style={{ color: t.muted, textAlign: "center", lineHeight: 20 }}>{message}</Text>
+      {onRetry ? (
+        <View style={{ alignSelf: "stretch", marginTop: spacing.sm }}>
+          <Button title="Try again" onPress={onRetry} />
+        </View>
+      ) : null}
     </View>
   );
 }
