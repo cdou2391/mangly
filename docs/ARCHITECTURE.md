@@ -16,7 +16,7 @@
 src/
   app/            Expo Router routes (screens only)
     (auth)/       login, register
-    (tabs)/       library, updates, search, notifications, settings
+    (tabs)/       library, updates (alerts + new chapters), search, settings
     manga/[id]    title detail
   api/            fetch client, endpoint functions, response types
   auth/           token storage, AuthProvider
@@ -72,3 +72,14 @@ Logout                 -> DELETE /devices/{id}
 ## Out of scope for the first release
 
 iOS, offline reading queue, in-app chapter reader (chapters open in the system browser tab), AI recommendations, admin screens.
+
+## Updates feed (alerts and new chapters merged)
+
+The Updates tab replaces the former Alerts tab. Two server lists describe the same releases differently, so the app merges them (`src/utils/feed.ts`, `useUpdatesFeed`):
+
+- `GET /notifications`: one row per chapter, kept as history, with a read flag. Only exists for titles with notifications on.
+- `GET /tracked-manga/recent-chapters`: the single latest chapter per tracked title, "new" when it is past the reading progress.
+
+Rules: a chapter appears once (alerts win, matched by chapter number); the latest chapter of titles without an alert is added; an alert is unread only while the title's progress has not passed it, so the feed, the tab badge and the Library bell always agree. Alerts for titles no longer tracked are dropped.
+
+Reading: a chapter backed by an alert is saved with `PATCH /notifications/{id}/read` (the server moves progress forward itself); any other chapter is saved with `PATCH /tracked-manga/{id}`. Older alerts of the same title are then marked read. "Mark all read" moves every new title to its latest chapter and calls `PATCH /notifications/read-all` (which, server side, only flips the flags), so the app updates progress itself and asks for confirmation first.

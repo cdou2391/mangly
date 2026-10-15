@@ -10,7 +10,7 @@ import type { AppNotification, RecentChapter, TrackedManga } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({
   trackingApi: { list: jest.fn(), recentChapters: jest.fn(), update: jest.fn() },
-  notificationsApi: { unreadCount: jest.fn(), list: jest.fn(), markRead: jest.fn() },
+  notificationsApi: { list: jest.fn(), markRead: jest.fn() },
 }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
@@ -18,7 +18,6 @@ jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({}
 const list = trackingApi.list as jest.Mock;
 const recentChapters = trackingApi.recentChapters as jest.Mock;
 const update = trackingApi.update as jest.Mock;
-const unreadCount = notificationsApi.unreadCount as jest.Mock;
 const listAlerts = notificationsApi.list as jest.Mock;
 const markAlertRead = notificationsApi.markRead as jest.Mock;
 
@@ -62,7 +61,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   list.mockResolvedValue(SAMPLE);
   recentChapters.mockResolvedValue([recent(2, "Chainsaw Man", "191", "https://x.test/191"), recent(3, "Dandadan", "Chapter 164", null)]);
-  unreadCount.mockResolvedValue({ count: 3 });
   update.mockResolvedValue({});
   listAlerts.mockResolvedValue([]);
   markAlertRead.mockResolvedValue({});
@@ -75,7 +73,8 @@ it("summarises the library and shows what is new", async () => {
   expect(await screen.findByText("NEW FOR YOU")).toBeTruthy();
   expect(screen.getByText(/5 tracked/)).toBeTruthy();
   expect(screen.getByText("2 new chapters")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Alerts, 3 unread" })).toBeTruthy();
+  // the bell counts everything unread in Updates: here the two new chapters
+  expect(screen.getByRole("button", { name: "Updates, 2 new" })).toBeTruthy();
 });
 
 it("lists titles you are behind on first, with how many chapters behind", async () => {
@@ -191,20 +190,20 @@ it("opens a title from its row", async () => {
   expect(router.push).toHaveBeenCalledWith({ pathname: "/manga/[id]", params: { id: "2" } });
 });
 
-it("takes you to Updates from 'See all' and to Alerts from the bell", async () => {
+it("takes you to Updates from 'See all' and from the bell", async () => {
   await renderLibrary();
   await screen.findByText("NEW FOR YOU");
   await fireEvent.press(screen.getByRole("link", { name: "See all" }));
   expect(router.navigate).toHaveBeenCalledWith("/updates");
-  await fireEvent.press(screen.getByRole("button", { name: "Alerts, 3 unread" }));
-  expect(router.navigate).toHaveBeenCalledWith("/notifications");
+  (router.navigate as jest.Mock).mockClear();
+  await fireEvent.press(screen.getByRole("button", { name: "Updates, 2 new" }));
+  expect(router.navigate).toHaveBeenCalledWith("/updates");
 });
 
 describe("when there is nothing to show", () => {
   it("invites you to find a manga", async () => {
     list.mockResolvedValue([]);
     recentChapters.mockResolvedValue([]);
-    unreadCount.mockResolvedValue({ count: 0 });
     await renderLibrary();
     expect(await screen.findByText("Nothing here yet")).toBeTruthy();
     expect(screen.getByText(/0 tracked/)).toBeTruthy();
@@ -328,13 +327,12 @@ describe("marking a chapter as read from NEW FOR YOU", () => {
   });
 
   describe("clearing the matching alerts", () => {
-    /** The server's unread alerts; marking one read removes it and lowers the count. */
+    /** The server's alerts; marking one read flips it, and the unread-only list drops it. */
     const serverAlerts = (initial: AppNotification[]) => {
-      let unread = initial;
-      listAlerts.mockImplementation(async () => unread);
-      unreadCount.mockImplementation(async () => ({ count: unread.length }));
+      let all = initial;
+      listAlerts.mockImplementation(async (opts?: { unreadOnly?: boolean }) => (opts?.unreadOnly ? all.filter((n) => !n.is_read) : all));
       markAlertRead.mockImplementation(async (id: number) => {
-        unread = unread.filter((n) => n.id !== id);
+        all = all.map((n) => (n.id === id ? { ...n, is_read: true } : n));
         return {};
       });
     };
@@ -348,12 +346,12 @@ describe("marking a chapter as read from NEW FOR YOU", () => {
       ]);
       serverCatchesUp();
       await renderLibrary();
-      expect(await screen.findByRole("button", { name: "Alerts, 4 unread" })).toBeTruthy();
+      expect(await screen.findByRole("button", { name: "Updates, 4 new" })).toBeTruthy();
       await fireEvent.press(screen.getByRole("button", { name: CARD.name }));
 
       await waitFor(() => expect(markAlertRead).toHaveBeenCalledTimes(2));
       expect(markAlertRead.mock.calls.map((c) => c[0]).sort()).toEqual([10, 11]);
-      expect(await screen.findByRole("button", { name: "Alerts, 2 unread" })).toBeTruthy();
+      expect(await screen.findByRole("button", { name: "Updates, 2 new" })).toBeTruthy();
     });
 
     it("does not touch alerts when saving the chapter fails", async () => {

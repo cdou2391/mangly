@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "rea
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
-import { notificationsApi, trackingApi } from "@/api/endpoints";
+import { trackingApi } from "@/api/endpoints";
 import { Button, ErrorNote, Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { FilterChips } from "@/components/library/FilterChips";
@@ -12,6 +12,8 @@ import { NewRail } from "@/components/library/NewRail";
 import { countByFilter, sortLibrary, type LibraryFilter } from "@/utils/library";
 import { FILTERS } from "@/utils/library";
 import { useOpenChapter } from "@/hooks/useOpenChapter";
+import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
+import { fromRecent } from "@/utils/feed";
 import { palette } from "@/theme";
 
 export default function Library() {
@@ -20,20 +22,20 @@ export default function Library() {
 
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
   const recent = useQuery({ queryKey: ["recent-chapters"], queryFn: trackingApi.recentChapters });
-  const unread = useQuery({ queryKey: ["notifications", "unread"], queryFn: notificationsApi.unreadCount });
+  const feed = useUpdatesFeed();
 
   const items = tracked.data;
   const sorted = useMemo(() => sortLibrary(items ?? []), [items]);
   const counts = useMemo(() => countByFilter(items ?? []), [items]);
   const shown = filter === "all" ? sorted : sorted.filter((i) => i.reading_status === filter);
   const fresh = useMemo(() => (recent.data ?? []).filter((c) => c.is_new).slice(0, 10), [recent.data]);
-  const unreadCount = unread.data?.count ?? 0;
+  const unreadCount = feed.unreadCount;
   // Only claim "all caught up" once both lists have loaded and there is something being followed; never while loading or after an error.
   const caughtUp = recent.isSuccess && fresh.length === 0 && (items?.length ?? 0) > 0;
 
   const refresh = useCallback(async () => {
-    await Promise.all([tracked.refetch(), recent.refetch(), unread.refetch()]);
-  }, [tracked, recent, unread]);
+    await Promise.all([tracked.refetch(), recent.refetch(), feed.refetch()]);
+  }, [tracked, recent, feed]);
 
   const subtitle =
     items === undefined ? null : (
@@ -53,8 +55,8 @@ export default function Library() {
   const bell = (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={unreadCount > 0 ? `Alerts, ${unreadCount} unread` : "Alerts"}
-      onPress={() => router.navigate("/notifications")}
+      accessibilityLabel={unreadCount > 0 ? `Updates, ${unreadCount} new` : "Updates"}
+      onPress={() => router.navigate("/updates")}
       style={styles.bell}
     >
       <Ionicons name="notifications-outline" size={21} color={palette.text} />
@@ -65,7 +67,7 @@ export default function Library() {
   const header = (
     <>
       <ScreenHeader title="Library" subtitle={subtitle} right={bell} />
-      <NewRail chapters={fresh} caughtUp={caughtUp} onOpen={openChapter} onSeeAll={() => router.navigate("/updates")} />
+      <NewRail chapters={fresh} caughtUp={caughtUp} onOpen={(c) => openChapter(fromRecent(c))} onSeeAll={() => router.navigate("/updates")} />
       {items && items.length > 0 ? <FilterChips value={filter} counts={counts} onChange={setFilter} /> : null}
     </>
   );

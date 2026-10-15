@@ -3,8 +3,7 @@ import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
-import { notificationsApi } from "@/api/endpoints";
+import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
 import { palette } from "@/theme";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
@@ -12,7 +11,6 @@ const ICONS: Record<string, [IconName, IconName]> = {
   library: ["library", "library-outline"],
   updates: ["flash", "flash-outline"],
   search: ["search", "search-outline"],
-  notifications: ["notifications", "notifications-outline"],
   settings: ["person", "person-outline"],
 };
 
@@ -27,12 +25,8 @@ const icon =
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const unread = useQuery({
-    queryKey: ["notifications", "unread"],
-    queryFn: notificationsApi.unreadCount,
-    refetchInterval: 120_000,
-  });
-  const count = unread.data?.count ?? 0;
+  // Updates carries what used to be the Alerts badge: the number of chapters you have not read yet.
+  const count = useUpdatesFeed().unreadCount;
 
   return (
     <>
@@ -50,16 +44,15 @@ export default function TabsLayout() {
         }}
       >
         <Tabs.Screen name="library" options={{ title: "Library", tabBarIcon: icon("library") }} />
-        <Tabs.Screen name="updates" options={{ title: "Updates", tabBarIcon: icon("updates") }} />
-        <Tabs.Screen name="search" options={{ title: "Search", tabBarIcon: icon("search") }} />
         <Tabs.Screen
-          name="notifications"
+          name="updates"
           options={{
-            title: "Alerts",
-            tabBarIcon: icon("notifications"),
+            title: "Updates",
+            tabBarIcon: icon("updates"),
             tabBarBadge: count > 0 ? (count > 99 ? "99+" : count) : undefined,
           }}
         />
+        <Tabs.Screen name="search" options={{ title: "Search", tabBarIcon: icon("search") }} />
         <Tabs.Screen name="settings" options={{ title: "Settings", tabBarIcon: icon("settings") }} />
       </Tabs>
     </>

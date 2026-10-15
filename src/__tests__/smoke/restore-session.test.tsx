@@ -16,7 +16,7 @@ it("restores a stored session and lands on the empty library", async () => {
   h.routeFetch({
     "/auth/mobile/refresh": () => h.json(200, h.pair),
     "/tracked-manga": () => h.json(200, []),
-    "/notifications/unread-count": () => h.json(200, { count: 0 }),
+    "/notifications": () => h.json(200, []),
   });
   renderRouter("./src/app", { initialUrl: "/" });
   await waitFor(() => expect(screen.getByText("Nothing here yet")).toBeTruthy(), { timeout: 5000 });

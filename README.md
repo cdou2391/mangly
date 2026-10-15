@@ -21,7 +21,7 @@ The app is shown to users as **MangaPulse** (the code lives in the `mangly` repo
 |---|---|
 | Sign in / register / sign out | Implemented. Backend merged in MangaPulse PR #20; **must be deployed** for sign-in to work |
 | Library, title detail, status and progress edits | Implemented (existing API) |
-| Updates feed, search and track, alerts inbox | Implemented (existing API) |
+| Updates feed (alerts and new chapters in one list), search and track | Implemented (existing API) |
 | Push notifications | App side implemented. **Needs the MangaPulse device endpoints and sender** |
 | AI recommendations, admin | Not started |
 
@@ -31,7 +31,7 @@ The backend changes are specified in [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.
 
 Every push to a `claude/**` branch or a `v*` tag builds an APK in GitHub Actions (**Actions → Build APK**, artifact `mangly-apk`). Download it, unzip, and sideload the `.apk`. The build points at `https://mangapulse.corecrest.tech/api/v1` and fails if that URL is not in the compiled bundle.
 
-- **Full app (default):** sign-in, library, search, updates, alerts, settings. Needs the MangaPulse mobile auth endpoints deployed (`feat/mobile-auth`, merged as MangaPulse PR #20).
+- **Full app (default):** sign-in, library, updates (alerts and new chapters in one feed), search, settings. Needs the MangaPulse mobile auth endpoints deployed (`feat/mobile-auth`, merged as MangaPulse PR #20).
 - **Shell:** only the splash and the empty home screen, no network. Set `EXPO_PUBLIC_SHELL_ONLY: "1"` in `.github/workflows/build-apk.yml`.
 
 **Splash screen:** Android 12+ only lets the native splash show a small icon on a flat colour, so the artwork (`assets/splash-art.jpg`) is drawn by the app itself. The native splash is a plain dark screen that hands over to the full-screen artwork (`src/components/SplashOverlay.tsx`) as soon as it has loaded; the artwork stays for at least 1.4 s, then fades out once the session is restored. To change it, replace `assets/splash-art.jpg` (portrait, about 1080x1920 or larger; it is scaled to cover the screen, so the edges may be trimmed on tall phones).
