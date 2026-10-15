@@ -2,6 +2,9 @@ const raw = process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:8080/api/v1";
 
 export const API_URL = raw.replace(/\/+$/, "");
 export const REQUEST_TIMEOUT_MS = 20_000;
+// Renewing the session is shorter on purpose: when the reply is lost the server has still rotated the token, and it only
+// accepts the old one again for a few seconds, so a timed-out renewal has to be retried quickly (see restoreSession).
+export const REFRESH_TIMEOUT_MS = 8_000;
 
 /**
  * Initial-release shell: only the splash screen and the home empty state. No auth, no network.

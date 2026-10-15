@@ -5,7 +5,8 @@ import { SHELL_ONLY } from "@/config";
 
 function AuthRedirect() {
   const { state } = useAuth();
-  return <Redirect href={state.status === "signedIn" ? "/library" : "/login"} />;
+  const href = state.status === "signedIn" ? "/library" : state.status === "unreachable" ? "/offline" : "/login";
+  return <Redirect href={href} />;
 }
 
 // In shell mode there is no AuthProvider, so the redirect component must not be rendered at all.

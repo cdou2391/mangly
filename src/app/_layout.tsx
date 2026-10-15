@@ -20,6 +20,7 @@ const queryClient = new QueryClient({
 function Routes({ ready }: { ready: boolean }) {
   const { state } = useAuth();
   const signedIn = state.status === "signedIn";
+  const unreachable = state.status === "unreachable";
 
   useEffect(() => {
     if (signedIn) registerForPush().catch((e) => console.warn("Push registration failed", e));
@@ -33,7 +34,10 @@ function Routes({ ready }: { ready: boolean }) {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="manga/[id]" />
       </Stack.Protected>
-      <Stack.Protected guard={!signedIn}>
+      <Stack.Protected guard={unreachable}>
+        <Stack.Screen name="offline" />
+      </Stack.Protected>
+      <Stack.Protected guard={!signedIn && !unreachable}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
     </Stack>

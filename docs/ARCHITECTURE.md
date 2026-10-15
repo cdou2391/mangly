@@ -83,3 +83,19 @@ The Updates tab replaces the former Alerts tab. Two server lists describe the sa
 Rules: a chapter appears once (alerts win, matched by chapter number); the latest chapter of titles without an alert is added; an alert is unread only while the title's progress has not passed it, so the feed, the tab badge and the Library bell always agree. Alerts for titles no longer tracked are dropped.
 
 Reading: a chapter backed by an alert is saved with `PATCH /notifications/{id}/read` (the server moves progress forward itself); any other chapter is saved with `PATCH /tracked-manga/{id}`. Older alerts of the same title are then marked read. "Mark all read" moves every new title to its latest chapter and calls `PATCH /notifications/read-all` (which, server side, only flips the flags), so the app updates progress itself and asks for confirmation first.
+
+## Staying signed in
+
+| Token | Lifetime | Where |
+|---|---|---|
+| Access token | 15 minutes | memory only |
+| Refresh token | 30 days, renewed (rotated) on every use | Android Keystore |
+| Hard cap per login | 90 days (`MOBILE_REFRESH_MAX_AGE_DAYS`) | server |
+
+At launch, while the splash is showing, the app renews the stored session (`restoreSession` in `src/api/client.ts`, driven by `AuthProvider`):
+
+- **accepted:** straight to the Library;
+- **refused (401/403, or any other 4xx that means the token can never work):** the session is dropped and the user goes to Log In;
+- **no answer (offline, timeout, 5xx, 429):** the token is kept and the user stays signed in. The app shows "Can't reach MangaPulse" instead of the login form, retries by itself (5 s, 10 s, 20 s, then every 30 s) and straight away when the app returns to the foreground, and moves on as soon as the server answers. The splash waits at most 8 s.
+
+A renewal that times out is retried once immediately with the same token: the server may have rotated it without the reply arriving, and it accepts the old token again for a few seconds (`MOBILE_REFRESH_REUSE_LEEWAY_SECONDS`). That is why the renewal timeout (8 s) is shorter than the ordinary request timeout (20 s).

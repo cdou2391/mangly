@@ -1,4 +1,4 @@
-import { ApiError, api, applySession, request, setAccessToken, setSessionListener } from "../client";
+import { ApiError, api, applySession, request, restoreSession, setAccessToken, setSessionListener } from "../client";
 import type { TokenPair } from "../types";
 
 const store: Record<string, string> = {};
@@ -118,6 +118,107 @@ describe("refresh on 401", () => {
   it("does not try to refresh unauthenticated calls", async () => {
     fetchMock.mockResolvedValueOnce(json(401, { detail: "Invalid credentials." }));
     await expect(api.post("/auth/mobile/login", {}, { auth: false })).rejects.toMatchObject({ status: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe("restoreSession", () => {
+  const abortError = () => Object.assign(new Error("The operation was aborted."), { name: "AbortError" });
+
+  it("says there is nothing to restore when no token is stored", async () => {
+    expect(await restoreSession()).toBe("none");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("restores the session and keeps the rotated token", async () => {
+    store["mangly.refresh_token"] = "refresh-1";
+    const listener = jest.fn();
+    setSessionListener(listener);
+    fetchMock.mockResolvedValueOnce(json(200, pair(2)));
+    expect(await restoreSession()).toBe("ok");
+    expect(store["mangly.refresh_token"]).toBe("refresh-2");
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ access_token: "access-2" }));
+  });
+
+  it.each([401, 403])("ends the session only when the server refuses the token (%i)", async (status) => {
+    store["mangly.refresh_token"] = "refresh-1";
+    fetchMock.mockResolvedValueOnce(json(status, { detail: "Invalid" }));
+    expect(await restoreSession()).toBe("rejected");
+    expect(store["mangly.refresh_token"]).toBeUndefined();
+  });
+
+  it.each([400, 404, 422])("ends the session when the server says the request itself is wrong (%i), since waiting cannot fix a token it will never accept", async (status) => {
+    store["mangly.refresh_token"] = "mpr_garbled";
+    fetchMock.mockResolvedValueOnce(json(status, { detail: "bad" }));
+    expect(await restoreSession()).toBe("rejected");
+    expect(store["mangly.refresh_token"]).toBeUndefined();
+  });
+
+  it.each([500, 502, 503, 429, 408])("keeps the token when the server answers %i, which says nothing about it", async (status) => {
+    store["mangly.refresh_token"] = "refresh-1";
+    fetchMock.mockResolvedValueOnce(json(status, { detail: "trouble" }));
+    expect(await restoreSession()).toBe("unreachable");
+    expect(store["mangly.refresh_token"]).toBe("refresh-1");
+  });
+
+  it("keeps the token and does not retry when the device is offline", async () => {
+    store["mangly.refresh_token"] = "refresh-1";
+    fetchMock.mockRejectedValue(new TypeError("Network request failed"));
+    expect(await restoreSession()).toBe("unreachable");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(store["mangly.refresh_token"]).toBe("refresh-1");
+  });
+
+  it("keeps the token when the reply cannot be read", async () => {
+    store["mangly.refresh_token"] = "refresh-1";
+    fetchMock.mockResolvedValueOnce(new Response("<html>bad gateway</html>", { status: 200 }));
+    expect(await restoreSession()).toBe("unreachable");
+    expect(store["mangly.refresh_token"]).toBe("refresh-1");
+  });
+
+  it("retries once straight away after a timeout, with the same token, since the reply may have been lost", async () => {
+    store["mangly.refresh_token"] = "refresh-1";
+    fetchMock.mockRejectedValueOnce(abortError()).mockResolvedValueOnce(json(200, pair(2)));
+    expect(await restoreSession()).toBe("ok");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ refresh_token: "refresh-1" });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ refresh_token: "refresh-1" });
+  });
+
+  it("gives up after two timeouts, keeping the token", async () => {
+    store["mangly.refresh_token"] = "refresh-1";
+    fetchMock.mockRejectedValue(abortError());
+    expect(await restoreSession()).toBe("unreachable");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(store["mangly.refresh_token"]).toBe("refresh-1");
+  });
+
+  it("gives the server 8 seconds to answer, not the 20 of ordinary requests", async () => {
+    jest.useFakeTimers();
+    try {
+      store["mangly.refresh_token"] = "refresh-1";
+      fetchMock.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(abortError()))),
+      );
+      const outcome = restoreSession();
+      await jest.advanceTimersByTimeAsync(7_900);
+      expect(fetchMock).toHaveBeenCalledTimes(1); // still waiting
+      await jest.advanceTimersByTimeAsync(200); // 8 s: the first attempt times out and the retry starts
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await jest.advanceTimersByTimeAsync(8_100);
+      expect(await outcome).toBe("unreachable");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("shares one attempt between callers", async () => {
+    store["mangly.refresh_token"] = "refresh-1";
+    fetchMock.mockResolvedValue(json(200, pair(2)));
+    const [a, b] = await Promise.all([restoreSession(), restoreSession()]);
+    expect([a, b]).toEqual(["ok", "ok"]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
