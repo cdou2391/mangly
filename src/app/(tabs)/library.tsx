@@ -1,81 +1,142 @@
-import { useMemo, useState } from "react";
-import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
-import { trackingApi } from "@/api/endpoints";
-import type { ReadingStatus } from "@/api/types";
-import { Empty, ErrorNote, Loading, Screen } from "@/components/ui";
-import { MangaRow } from "@/components/MangaRow";
-import { spacing, useTheme } from "@/theme";
-
-const FILTERS: { key: ReadingStatus | "all"; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "reading", label: "Reading" },
-  { key: "plan_to_read", label: "Plan" },
-  { key: "on_hold", label: "On hold" },
-  { key: "completed", label: "Done" },
-  { key: "dropped", label: "Dropped" },
-];
+import { notificationsApi, trackingApi } from "@/api/endpoints";
+import type { RecentChapter } from "@/api/types";
+import { Button, ErrorNote, Screen } from "@/components/ui";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { FilterChips } from "@/components/library/FilterChips";
+import { LibraryRow } from "@/components/library/LibraryRow";
+import { NewRail } from "@/components/library/NewRail";
+import { countByFilter, sortLibrary, type LibraryFilter } from "@/utils/library";
+import { FILTERS } from "@/utils/library";
+import { palette } from "@/theme";
 
 export default function Library() {
-  const t = useTheme();
-  const [filter, setFilter] = useState<ReadingStatus | "all">("reading");
-  const q = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
+  const [filter, setFilter] = useState<LibraryFilter>("all");
 
-  const items = useMemo(() => {
-    const all = q.data ?? [];
-    return filter === "all" ? all : all.filter((i) => i.reading_status === filter);
-  }, [q.data, filter]);
+  const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
+  const recent = useQuery({ queryKey: ["recent-chapters"], queryFn: trackingApi.recentChapters });
+  const unread = useQuery({ queryKey: ["notifications", "unread"], queryFn: notificationsApi.unreadCount });
+
+  const items = tracked.data;
+  const sorted = useMemo(() => sortLibrary(items ?? []), [items]);
+  const counts = useMemo(() => countByFilter(items ?? []), [items]);
+  const shown = filter === "all" ? sorted : sorted.filter((i) => i.reading_status === filter);
+  const fresh = useMemo(() => (recent.data ?? []).filter((c) => c.is_new).slice(0, 10), [recent.data]);
+  const unreadCount = unread.data?.count ?? 0;
+
+  const refresh = useCallback(async () => {
+    await Promise.all([tracked.refetch(), recent.refetch(), unread.refetch()]);
+  }, [tracked, recent, unread]);
+
+  const openChapter = (c: RecentChapter) => {
+    if (c.chapter_url) void WebBrowser.openBrowserAsync(c.chapter_url);
+    else router.push({ pathname: "/manga/[id]", params: { id: String(c.tracking_id) } });
+  };
+
+  const subtitle =
+    items === undefined ? null : (
+      <>
+        {counts.all} tracked
+        {fresh.length > 0 ? (
+          <>
+            {" · "}
+            <Text style={{ color: palette.primary, fontWeight: "700" }}>
+              {fresh.length} new {fresh.length === 1 ? "chapter" : "chapters"}
+            </Text>
+          </>
+        ) : null}
+      </>
+    );
+
+  const bell = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={unreadCount > 0 ? `Alerts, ${unreadCount} unread` : "Alerts"}
+      onPress={() => router.navigate("/notifications")}
+      style={styles.bell}
+    >
+      <Ionicons name="notifications-outline" size={21} color={palette.text} />
+      {unreadCount > 0 ? <View style={styles.dot} /> : null}
+    </Pressable>
+  );
+
+  const header = (
+    <>
+      <ScreenHeader title="Library" subtitle={subtitle} right={bell} />
+      <NewRail chapters={fresh} onOpen={openChapter} onSeeAll={() => router.navigate("/updates")} />
+      {items && items.length > 0 ? <FilterChips value={filter} counts={counts} onChange={setFilter} /> : null}
+    </>
+  );
+
+  if (tracked.isError && !items) {
+    return (
+      <Screen padded={false}>
+        <ScreenHeader title="Library" right={bell} />
+        <ErrorNote title="Couldn't load your library" message={tracked.error.message} onRetry={() => tracked.refetch()} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen padded={false}>
-      <Text style={{ color: t.text, fontSize: 26, fontWeight: "800", padding: spacing.lg, paddingBottom: spacing.sm }}>
-        Library
-      </Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingHorizontal: spacing.lg }}>
-        {FILTERS.map((f) => (
-          <Pressable
-            key={f.key}
-            onPress={() => setFilter(f.key)}
-            style={{
-              paddingHorizontal: spacing.md,
-              paddingVertical: 6,
-              borderRadius: 999,
-              backgroundColor: filter === f.key ? t.primary : t.card,
-              borderWidth: 1,
-              borderColor: filter === f.key ? t.primary : t.border,
-            }}
-          >
-            <Text style={{ color: filter === f.key ? t.onPrimary : t.text, fontSize: 13 }}>{f.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {q.isLoading ? (
-        <Loading />
-      ) : q.isError ? (
-        <ErrorNote message={q.error.message} onRetry={() => q.refetch()} />
-      ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(i) => String(i.id)}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm, flexGrow: 1 }}
-          refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => q.refetch()} tintColor={t.primary} />}
-          ListEmptyComponent={<Empty title="Nothing here yet" hint="Use Search to add a title to your library." />}
-          renderItem={({ item }) => (
-            <MangaRow
-              title={item.manga.canonical_name}
-              coverUrl={item.manga.cover_url}
-              subtitle={`Read: ${item.last_chapter_read ?? "—"}  ·  Latest: ${item.manga.latest_chapter ?? "—"}`}
-              badge={
-                item.manga.latest_chapter && item.manga.latest_chapter !== item.last_chapter_read
-                  ? "New chapter available"
-                  : undefined
-              }
-              onPress={() => router.push({ pathname: "/manga/[id]", params: { id: String(item.id) } })}
-            />
-          )}
-        />
-      )}
+      <FlatList
+        data={tracked.isLoading ? [] : shown}
+        keyExtractor={(i) => String(i.id)}
+        ListHeaderComponent={header}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+        refreshControl={<RefreshControl refreshing={tracked.isRefetching} onRefresh={refresh} tintColor={palette.primary} colors={[palette.primary]} progressBackgroundColor={palette.card} />}
+        renderItem={({ item }) => (
+          <View style={styles.cell}>
+            <LibraryRow item={item} onPress={() => router.push({ pathname: "/manga/[id]", params: { id: String(item.id) } })} />
+          </View>
+        )}
+        ListEmptyComponent={
+          tracked.isLoading ? (
+            <Skeleton />
+          ) : (items?.length ?? 0) === 0 ? (
+            <View style={styles.empty}>
+              <Ionicons name="library-outline" size={44} color={palette.faint} />
+              <Text style={styles.emptyTitle}>Nothing here yet</Text>
+              <Text style={styles.emptyHint}>Search for a title and tap Track to start following it.</Text>
+              <View style={{ alignSelf: "stretch", marginTop: 8 }}>
+                <Button title="Find a manga" onPress={() => router.navigate("/search")} />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>No titles here</Text>
+              <Text style={styles.emptyHint}>
+                Nothing is marked "{FILTERS.find((f) => f.key === filter)?.label}" right now.
+              </Text>
+            </View>
+          )
+        }
+      />
     </Screen>
   );
 }
+
+function Skeleton() {
+  return (
+    <View style={{ gap: 11 }}>
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} style={[styles.cell, styles.skeleton]} accessibilityElementsHidden />
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  cell: { paddingHorizontal: 20, paddingBottom: 11 },
+  bell: { width: 42, height: 42, borderRadius: 21, backgroundColor: palette.card, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
+  dot: { position: "absolute", top: 8, right: 9, width: 13, height: 13, borderRadius: 7, backgroundColor: palette.primary, borderWidth: 2, borderColor: palette.card },
+  empty: { alignItems: "center", gap: 10, paddingHorizontal: 32, paddingTop: 56 },
+  emptyTitle: { color: palette.text, fontSize: 18, fontWeight: "800" },
+  emptyHint: { color: palette.muted, fontSize: 14, textAlign: "center", lineHeight: 20 },
+  skeleton: { height: 98, marginHorizontal: 20, borderRadius: 16, backgroundColor: palette.card, opacity: 0.7 },
+});
