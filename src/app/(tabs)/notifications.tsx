@@ -9,7 +9,7 @@ import { spacing, useTheme } from "@/theme";
 export default function Notifications() {
   const t = useTheme();
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["notifications"], queryFn: notificationsApi.list });
+  const q = useQuery({ queryKey: ["notifications"], queryFn: () => notificationsApi.list() });
   const refresh = () => qc.invalidateQueries({ queryKey: ["notifications"] });
   const markRead = useMutation({ mutationFn: notificationsApi.markRead, onSuccess: refresh });
   const markAll = useMutation({ mutationFn: notificationsApi.markAllRead, onSuccess: refresh });

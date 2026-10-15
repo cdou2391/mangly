@@ -56,7 +56,8 @@ export const mangaApi = {
 };
 
 export const notificationsApi = {
-  list: () => api.get<AppNotification[]>("/notifications"),
+  list: (opts?: { unreadOnly?: boolean }) =>
+    api.get<AppNotification[]>(opts?.unreadOnly ? "/notifications?unread_only=true" : "/notifications"),
   unreadCount: () => api.get<{ count: number }>("/notifications/unread-count"),
   markRead: (id: number) => api.patch<AppNotification>(`/notifications/${id}/read`),
   markAllRead: () => api.patch<unknown>("/notifications/read-all"),

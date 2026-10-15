@@ -1,22 +1,26 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { Platform, ToastAndroid } from "react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import Library from "@/app/(tabs)/library";
 import { notificationsApi, trackingApi } from "@/api/endpoints";
-import type { RecentChapter, TrackedManga } from "@/api/types";
+import type { AppNotification, RecentChapter, TrackedManga } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({
-  trackingApi: { list: jest.fn(), recentChapters: jest.fn() },
-  notificationsApi: { unreadCount: jest.fn() },
+  trackingApi: { list: jest.fn(), recentChapters: jest.fn(), update: jest.fn() },
+  notificationsApi: { unreadCount: jest.fn(), list: jest.fn(), markRead: jest.fn() },
 }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
 
 const list = trackingApi.list as jest.Mock;
 const recentChapters = trackingApi.recentChapters as jest.Mock;
+const update = trackingApi.update as jest.Mock;
 const unreadCount = notificationsApi.unreadCount as jest.Mock;
+const listAlerts = notificationsApi.list as jest.Mock;
+const markAlertRead = notificationsApi.markRead as jest.Mock;
 
 const NOW = "2026-10-14T12:00:00Z";
 function tracked(id: number, name: string, read: string | null, latest: string | null, status: TrackedManga["reading_status"] = "reading", at = NOW): TrackedManga {
@@ -31,10 +35,15 @@ const recent = (id: number, title: string, chapter: string, url: string | null, 
   tracking_id: id, manga_id: id, manga_title: title, manga_cover_url: null, chapter, chapter_url: url, chapter_at: NOW, source: "mangaread", is_new: isNew,
 });
 
+const alert = (id: number, mangaId: number, chapter: string): AppNotification => ({
+  id, user_id: 1, manga_id: mangaId, source_record_id: null, chapter_released: chapter, latest_chapter_url: null,
+  source: "mangaread", is_read: false, created_at: NOW, manga: tracked(mangaId, "x", null, null).manga,
+});
+
 const metrics = { frame: { x: 0, y: 0, width: 412, height: 915 }, insets: { top: 24, left: 0, right: 0, bottom: 0 } };
 const renderLibrary = () =>
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } })}>
       <SafeAreaProvider initialMetrics={metrics}>
         <Library />
       </SafeAreaProvider>
@@ -54,6 +63,9 @@ beforeEach(() => {
   list.mockResolvedValue(SAMPLE);
   recentChapters.mockResolvedValue([recent(2, "Chainsaw Man", "191", "https://x.test/191"), recent(3, "Dandadan", "Chapter 164", null)]);
   unreadCount.mockResolvedValue({ count: 3 });
+  update.mockResolvedValue({});
+  listAlerts.mockResolvedValue([]);
+  markAlertRead.mockResolvedValue({});
 });
 
 const titles = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => /\. (Read|Not started)/.test(l ?? ""));
@@ -155,7 +167,7 @@ describe("when there is nothing to show", () => {
   });
 
   it("says so when the selected filter no longer matches anything", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
     list.mockResolvedValue([tracked(1, "Reader", "1", "1"), tracked(2, "Planned", null, "5", "plan_to_read")]);
     await render(
       <QueryClientProvider client={client}>
@@ -183,5 +195,154 @@ describe("when there is nothing to show", () => {
     list.mockResolvedValueOnce(SAMPLE);
     await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(/5 tracked/)).toBeTruthy();
+  });
+});
+
+describe("marking a chapter as read from NEW FOR YOU", () => {
+  const CARD = { name: "Chainsaw Man, Ch. 191, new" };
+  const url = "https://x.test/191";
+
+  /** After a successful save the server reports the title as caught up. */
+  const serverCatchesUp = () =>
+    update.mockImplementation(async () => {
+      list.mockResolvedValue(SAMPLE.map((t) => (t.id === 2 ? { ...t, last_chapter_read: "191" } : t)));
+      recentChapters.mockResolvedValue([recent(3, "Dandadan", "Chapter 164", null)]);
+      return {};
+    });
+
+  it("opens the chapter and saves it as read, using the bare chapter number and the link", async () => {
+    serverCatchesUp();
+    await renderLibrary();
+    await fireEvent.press(await screen.findByRole("button", CARD));
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(url);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(2, { last_chapter_read: "191", last_chapter_url: url });
+  });
+
+  it("saves 'Chapter 164' as 164, not the label", async () => {
+    recentChapters.mockResolvedValue([recent(3, "Dandadan", "Chapter 164", "https://x.test/164")]);
+    await renderLibrary();
+    await fireEvent.press(await screen.findByRole("button", { name: "Dandadan, Ch. 164, new" }));
+    expect(update).toHaveBeenCalledWith(3, { last_chapter_read: "164", last_chapter_url: "https://x.test/164" });
+  });
+
+  it("takes the card out of the rail and catches the row up, leaving other titles alone", async () => {
+    serverCatchesUp();
+    await renderLibrary();
+    await fireEvent.press(await screen.findByRole("button", CARD));
+
+    await waitFor(() => expect(screen.queryByRole("button", CARD)).toBeNull());
+    expect(screen.getByText("1 new chapter")).toBeTruthy();
+    // the row no longer says it is behind
+    expect(screen.getByRole("button", { name: /^Chainsaw Man\. Read Ch\. 191\. Latest Ch\. 191\.$/ })).toBeTruthy();
+    expect(screen.queryByText("+3")).toBeNull();
+    // the other new title is untouched
+    expect(screen.getByRole("button", { name: "Dandadan, Ch. 164, new" })).toBeTruthy();
+    expect(screen.getByText("+4")).toBeTruthy();
+  });
+
+  it("opens the chapter even while saving is still in flight", async () => {
+    let finish!: () => void;
+    update.mockReturnValue(new Promise((resolve) => (finish = () => resolve({}))));
+    await renderLibrary();
+    await fireEvent.press(await screen.findByRole("button", CARD));
+    // the save has not finished, yet the chapter is already open: reading never waits on the network
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(url);
+    expect(update).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+  });
+
+  it("puts everything back and tells the user when saving fails", async () => {
+    jest.replaceProperty(Platform, "OS", "android");
+    const toast = jest.spyOn(ToastAndroid, "show").mockImplementation(() => {});
+    await renderLibrary();
+    const card = await screen.findByRole("button", CARD);
+    // Offline: the save fails AND the refresh afterwards fails, so nothing from the server can repair the screen.
+    // Only the rollback can, which is what this test is for.
+    update.mockRejectedValue(new Error("Network error."));
+    list.mockRejectedValue(new Error("Network error."));
+    recentChapters.mockRejectedValue(new Error("Network error."));
+    await fireEvent.press(card);
+
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't mark it as read. Check your connection.", ToastAndroid.LONG));
+    // nothing was lost: the card is back and the row is still behind
+    expect(await screen.findByRole("button", CARD)).toBeTruthy();
+    expect(screen.getByText("+3")).toBeTruthy();
+    expect(screen.getByText("2 new chapters")).toBeTruthy();
+    jest.restoreAllMocks();
+  });
+
+  it("does not save anything when there is no link to open; it goes to the title instead", async () => {
+    await renderLibrary();
+    await fireEvent.press(await screen.findByRole("button", { name: "Dandadan, Ch. 164, new" }));
+    expect(update).not.toHaveBeenCalled();
+    expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
+    expect(router.push).toHaveBeenCalledWith({ pathname: "/manga/[id]", params: { id: "3" } });
+  });
+
+  describe("clearing the matching alerts", () => {
+    /** The server's unread alerts; marking one read removes it and lowers the count. */
+    const serverAlerts = (initial: AppNotification[]) => {
+      let unread = initial;
+      listAlerts.mockImplementation(async () => unread);
+      unreadCount.mockImplementation(async () => ({ count: unread.length }));
+      markAlertRead.mockImplementation(async (id: number) => {
+        unread = unread.filter((n) => n.id !== id);
+        return {};
+      });
+    };
+
+    it("marks this title's alerts up to the tapped chapter as read, and nothing else", async () => {
+      serverAlerts([
+        alert(10, 2, "Chapter 190"), // same title, older: settled by reading 191
+        alert(11, 2, "191"), // same title, this chapter
+        alert(12, 2, "Chapter 192"), // same title, newer: still unread
+        alert(13, 3, "Chapter 164"), // different title: untouched
+      ]);
+      serverCatchesUp();
+      await renderLibrary();
+      expect(await screen.findByRole("button", { name: "Alerts, 4 unread" })).toBeTruthy();
+      await fireEvent.press(screen.getByRole("button", { name: CARD.name }));
+
+      await waitFor(() => expect(markAlertRead).toHaveBeenCalledTimes(2));
+      expect(markAlertRead.mock.calls.map((c) => c[0]).sort()).toEqual([10, 11]);
+      expect(await screen.findByRole("button", { name: "Alerts, 2 unread" })).toBeTruthy();
+    });
+
+    it("does not touch alerts when saving the chapter fails", async () => {
+      serverAlerts([alert(10, 2, "191")]);
+      update.mockRejectedValue(new Error("Network error."));
+      await renderLibrary();
+      await fireEvent.press(await screen.findByRole("button", CARD));
+      await waitFor(() => expect(update).toHaveBeenCalled());
+      await act(async () => {});
+      expect(markAlertRead).not.toHaveBeenCalled();
+    });
+
+    it("keeps the chapter saved even if clearing the alerts fails", async () => {
+      jest.spyOn(console, "warn").mockImplementation(() => {});
+      serverAlerts([alert(10, 2, "191")]);
+      markAlertRead.mockRejectedValue(new Error("boom"));
+      serverCatchesUp();
+      await renderLibrary();
+      await fireEvent.press(await screen.findByRole("button", CARD));
+
+      await waitFor(() => expect(markAlertRead).toHaveBeenCalled());
+      await waitFor(() => expect(screen.queryByRole("button", CARD)).toBeNull());
+      expect(screen.getByRole("button", { name: /^Chainsaw Man\. Read Ch\. 191\./ })).toBeTruthy();
+      jest.restoreAllMocks();
+    });
+
+    it("keeps the chapter saved even if the alerts cannot be loaded", async () => {
+      jest.spyOn(console, "warn").mockImplementation(() => {});
+      listAlerts.mockRejectedValue(new Error("offline"));
+      serverCatchesUp();
+      await renderLibrary();
+      await fireEvent.press(await screen.findByRole("button", CARD));
+      await waitFor(() => expect(listAlerts).toHaveBeenCalled());
+      await waitFor(() => expect(screen.queryByRole("button", CARD)).toBeNull());
+      expect(markAlertRead).not.toHaveBeenCalled();
+      jest.restoreAllMocks();
+    });
   });
 });

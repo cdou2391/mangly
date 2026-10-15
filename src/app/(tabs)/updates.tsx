@@ -1,14 +1,15 @@
 import { FlatList, RefreshControl, Text } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import * as WebBrowser from "expo-web-browser";
 import { trackingApi } from "@/api/endpoints";
 import { Empty, ErrorNote, Loading, Screen } from "@/components/ui";
 import { MangaRow } from "@/components/MangaRow";
+import { useOpenChapter } from "@/hooks/useOpenChapter";
 import { spacing, useTheme } from "@/theme";
 
 export default function Updates() {
   const t = useTheme();
   const q = useQuery({ queryKey: ["recent-chapters"], queryFn: trackingApi.recentChapters });
+  const openChapter = useOpenChapter();
 
   return (
     <Screen padded={false}>
@@ -32,7 +33,7 @@ export default function Updates() {
               coverUrl={item.manga_cover_url}
               subtitle={`Chapter ${item.chapter} · ${item.source}`}
               badge={item.is_new ? "NEW" : undefined}
-              onPress={item.chapter_url ? () => WebBrowser.openBrowserAsync(item.chapter_url!) : undefined}
+              onPress={() => openChapter(item)}
             />
           )}
         />

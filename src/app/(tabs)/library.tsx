@@ -1,11 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import { notificationsApi, trackingApi } from "@/api/endpoints";
-import type { RecentChapter } from "@/api/types";
 import { Button, ErrorNote, Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { FilterChips } from "@/components/library/FilterChips";
@@ -13,10 +11,12 @@ import { LibraryRow } from "@/components/library/LibraryRow";
 import { NewRail } from "@/components/library/NewRail";
 import { countByFilter, sortLibrary, type LibraryFilter } from "@/utils/library";
 import { FILTERS } from "@/utils/library";
+import { useOpenChapter } from "@/hooks/useOpenChapter";
 import { palette } from "@/theme";
 
 export default function Library() {
   const [filter, setFilter] = useState<LibraryFilter>("all");
+  const openChapter = useOpenChapter();
 
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
   const recent = useQuery({ queryKey: ["recent-chapters"], queryFn: trackingApi.recentChapters });
@@ -32,11 +32,6 @@ export default function Library() {
   const refresh = useCallback(async () => {
     await Promise.all([tracked.refetch(), recent.refetch(), unread.refetch()]);
   }, [tracked, recent, unread]);
-
-  const openChapter = (c: RecentChapter) => {
-    if (c.chapter_url) void WebBrowser.openBrowserAsync(c.chapter_url);
-    else router.push({ pathname: "/manga/[id]", params: { id: String(c.tracking_id) } });
-  };
 
   const subtitle =
     items === undefined ? null : (

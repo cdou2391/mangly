@@ -1,4 +1,4 @@
-import { parseChapter, readProgress, shortChapter, unreadChapters } from "../chapters";
+import { chapterToStore, parseChapter, readProgress, shortChapter, unreadChapters } from "../chapters";
 
 describe("parseChapter", () => {
   it.each([
@@ -59,5 +59,21 @@ describe("readProgress", () => {
     expect(readProgress(null, "100")).toBeNull();
     expect(readProgress("5", "0")).toBeNull();
     expect(readProgress("5", "Oneshot")).toBeNull();
+  });
+});
+
+describe("chapterToStore", () => {
+  it.each([
+    ["191", "191"],
+    ["Chapter 191", "191"],
+    ["Ch. 12.5", "12.5"],
+    ["Vol.3 Chapter 42", "42"], // the web app's regex would save "3 Chapter 42"
+    ["Chapter 12 - The Name 2", "12"],
+    ["Chapter 007", "7"],
+  ])("%s -> %s", (label, expected) => expect(chapterToStore(label)).toBe(expected));
+
+  it("keeps a label that has no number", () => {
+    expect(chapterToStore("  Oneshot ")).toBe("Oneshot");
+    expect(chapterToStore("Prologue")).toBe("Prologue");
   });
 });

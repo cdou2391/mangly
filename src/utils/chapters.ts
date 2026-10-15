@@ -36,3 +36,13 @@ export function readProgress(read: string | null | undefined, latest: string | n
   if (r === null || l === null || l <= 0) return null;
   return Math.min(1, Math.max(0, r / l));
 }
+
+/**
+ * The value to save as "last chapter read" for a chapter label. Saves the bare number the way the web app does
+ * ("Chapter 191" -> "191"), which is what the server compares; keeps the label as is when it has no number
+ * ("Oneshot", "Prologue"), which the server treats as chapter 0.
+ */
+export function chapterToStore(label: string): string {
+  const n = parseChapter(label);
+  return n === null ? label.trim() : String(n);
+}
