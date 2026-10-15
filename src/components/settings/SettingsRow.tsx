@@ -11,20 +11,23 @@ export function SettingsRow({
   value,
   onPress,
   last,
+  warn,
 }: {
   icon: IconName;
   label: string;
   value?: string;
   onPress?: () => void;
   last?: boolean;
+  /** Draw the value (and icon) in the alert colour, for a state that needs attention. */
+  warn?: boolean;
 }) {
   const inner = (
     <>
       <View style={styles.icon}>
-        <Ionicons name={icon} size={18} color={palette.text} />
+        <Ionicons name={icon} size={18} color={warn ? palette.danger : palette.text} />
       </View>
       <Text style={styles.label}>{label}</Text>
-      {value ? <Text style={styles.value}>{value}</Text> : null}
+      {value ? <Text style={[styles.value, warn && { color: palette.danger, fontWeight: "700" }]}>{value}</Text> : null}
       {onPress ? <Ionicons name="open-outline" size={17} color={palette.faint} /> : null}
     </>
   );

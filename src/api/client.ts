@@ -1,5 +1,6 @@
 import { API_URL, REFRESH_TIMEOUT_MS, REQUEST_TIMEOUT_MS } from "@/config";
 import { tokenStore } from "@/auth/tokenStore";
+import { setOnline } from "./reachability";
 import type { TokenPair } from "./types";
 
 export class ApiError extends Error {
@@ -34,11 +35,18 @@ export async function applySession(pair: TokenPair) {
   onSession(pair);
 }
 
+export function hasAccessToken() {
+  return accessToken !== null;
+}
+
 export async function dropSession() {
   accessToken = null;
   await tokenStore.clear();
   onSession(null);
 }
+
+/** What anyone sees when a request could not reach the server (offline, timed out, or the server's front door is up but the app is not). */
+export const UNREACHABLE_MESSAGE = "Can't reach MangaPulse. Check your connection and try again later.";
 
 const TIMED_OUT = "timeout";
 const isTimeout = (e: unknown) => e instanceof ApiError && e.status === 0 && e.detail === TIMED_OUT;
@@ -52,10 +60,14 @@ async function rawFetch(path: string, init: RequestInit, auth: boolean, timeoutM
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(`${API_URL}${path}`, { ...init, headers, signal: controller.signal });
+    const res = await fetch(`${API_URL}${path}`, { ...init, headers, signal: controller.signal });
+    // 502/503/504 come from the proxy in front of the app: the server is not answering even though something replied.
+    setOnline(res.status !== 502 && res.status !== 503 && res.status !== 504);
+    return res;
   } catch (e) {
     const aborted = e instanceof Error && e.name === "AbortError";
-    throw new ApiError(0, aborted ? "Request timed out." : "Network error. Check your connection.", aborted ? TIMED_OUT : undefined);
+    setOnline(false);
+    throw new ApiError(0, UNREACHABLE_MESSAGE, aborted ? TIMED_OUT : undefined);
   } finally {
     clearTimeout(timer);
   }
@@ -112,9 +124,13 @@ export function restoreSession(): Promise<RestoreOutcome> {
   return refreshInFlight;
 }
 
-/** True when the session was renewed. Used when a request comes back 401 mid-session. */
-export async function refreshSession(): Promise<boolean> {
-  return (await restoreSession()) === "ok";
+/** Ask the server whether it is there (no sign-in needed). Being unreachable is the answer, not an error. */
+export async function ping(): Promise<boolean> {
+  try {
+    return (await rawFetch("/health", {}, false, REFRESH_TIMEOUT_MS)).ok;
+  } catch {
+    return false;
+  }
 }
 
 async function toError(res: Response): Promise<ApiError> {
@@ -137,8 +153,11 @@ export async function request<T>(
 ): Promise<T> {
   const auth = opts.auth ?? true;
   let res = await rawFetch(path, init, auth);
-  if (res.status === 401 && auth && (await refreshSession())) {
-    res = await rawFetch(path, init, auth);
+  if (res.status === 401 && auth) {
+    const outcome = await restoreSession();
+    if (outcome === "ok") res = await rawFetch(path, init, auth);
+    // The token was not refused, the server just could not be asked: that is a connection problem, not a "401".
+    else if (outcome === "unreachable") throw new ApiError(0, UNREACHABLE_MESSAGE);
   }
   if (!res.ok) throw await toError(res);
   if (res.status === 204) return undefined as T;

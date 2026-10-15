@@ -110,7 +110,7 @@ export function useMarkChapterRead() {
 
     onError: (_error, _chapter, previous) => {
       restore(qc, previous);
-      failToast("Couldn't mark it as read. Check your connection.");
+      failToast("Couldn't mark it as read. Check your connection and try again later.");
     },
 
     // Whatever happened, the server is the source of truth.
@@ -153,7 +153,7 @@ export function useMarkAllRead() {
 
     onError: (_error, _fresh, previous) => {
       restore(qc, previous);
-      failToast("Couldn't mark everything as read. Check your connection.");
+      failToast("Couldn't mark everything as read. Check your connection and try again later.");
     },
 
     onSettled: () => {

@@ -96,6 +96,25 @@ At launch, while the splash is showing, the app renews the stored session (`rest
 
 - **accepted:** straight to the Library;
 - **refused (401/403, or any other 4xx that means the token can never work):** the session is dropped and the user goes to Log In;
-- **no answer (offline, timeout, 5xx, 429):** the token is kept and the user stays signed in. The app shows "Can't reach MangaPulse" instead of the login form, retries by itself (5 s, 10 s, 20 s, then every 30 s) and straight away when the app returns to the foreground, and moves on as soon as the server answers. The splash waits at most 8 s.
+- **no answer (offline, timeout, 5xx, 429):** the token is kept and the user stays signed in. With a recent offline copy (next section) the app opens straight into the Library on it; without one it shows "Can't reach MangaPulse" instead of the login form, retries by itself (5 s, 10 s, 20 s, then every 30 s) and straight away when the app returns to the foreground, and moves on as soon as the server answers. The splash waits at most 8 s.
 
 A renewal that times out is retried once immediately with the same token: the server may have rotated it without the reply arriving, and it accepts the old token again for a few seconds (`MOBILE_REFRESH_REUSE_LEEWAY_SECONDS`). That is why the renewal timeout (8 s) is shorter than the ordinary request timeout (20 s).
+
+## Working offline (read-only)
+
+The app can be opened and read when the server cannot be reached. It is a copy, not a second source of truth: the server stays the only place anything is written.
+
+| | |
+|---|---|
+| What is kept | The Library list, the latest chapters and the alerts (query keys `tracked`, `recent-chapters`, `notifications`), plus the signed-in user. Search is online-only. Cover images are kept by `expo-image`'s own disk cache, so covers already seen still show. |
+| Where | One file, `mangapulse-cache.json`, in the app's private document directory (`src/cache/store.ts`). Backups are off (`allowBackup: false`). It holds the user's email and library, not tokens; the refresh token stays in the Keystore. |
+| When it is saved | A second after the data last changed, and when the app goes to the background. Nothing is saved until the server has answered once, so a fresh sign-in never saves an empty copy. |
+| When it is shown | Only when the session cannot be checked with the server at launch (offline, timeout, 5xx, 429), or the server was reached but renewing the session failed for a non-permanent reason. On a normal launch the server's answer wins; the copy is shown meanwhile and refreshed. |
+| How long it lives | Until sign-out (or the server refusing the session), **but never more than 7 days since the server last answered** (`MAX_AGE_MS`). Past that the copy is ignored and the app insists on a fresh answer: "Can't reach MangaPulse" until the server is reached. Edits and failed refreshes do not make a copy look newer; only a real answer from the server does. |
+| Whose it is | The copy records its user. A different user signing in deletes it. Sign-out, a refused session and "no token stored" delete it and empty the in-memory query cache. |
+
+**Offline behaviour.** The user goes straight in: no banner, no offline screen. The only indicator is **Settings → Connection: Online / Offline**, driven by `src/api/reachability.ts`, which every request updates (a reply of any kind is online; a network failure, a timeout or a 502/503/504 from the proxy is offline). While offline the app pings `/health` (5 s, 10 s, 20 s, then every 30 s, and on returning to the foreground). When the server answers it goes back to Online, everything on screen is refetched, and the first request renews the session as usual.
+
+**Writes are never queued.** Changing a status, toggling alerts, removing a title, marking chapters read and adding from Search all go to the server. If it cannot be reached the request fails with "Can't reach MangaPulse. Check your connection and try again later." (a toast for marking read, an inline message elsewhere) and the screen goes back to what it was. Signing out while offline signs out on the device (the copy and token are deleted); the server-side session is not revoked and expires on its own.
+
+**Known limits.** An optimistic edit that is saved to disk a second before the app is killed offline can survive as the saved state until the next refresh. A user who is offline for more than 7 days must reach the server once before the app opens.

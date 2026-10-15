@@ -232,6 +232,22 @@ describe("when there is nothing to show", () => {
     expect(screen.getByRole("button", { name: "Plan, 0" })).toBeTruthy(); // the chip stays so the user can switch away
   });
 
+  it("shows the saved library, not an error, when a refresh cannot reach the server", async () => {
+    list.mockRejectedValue(new Error("Can't reach MangaPulse. Check your connection and try again later."));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["tracked"], SAMPLE);
+    await render(
+      <QueryClientProvider client={client}>
+        <SafeAreaProvider initialMetrics={metrics}>
+          <Library />
+        </SafeAreaProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(client.getQueryState(["tracked"])?.status).toBe("error"));
+    expect(screen.getByText(/5 tracked/)).toBeTruthy();
+    expect(screen.queryByText("Couldn't load your library")).toBeNull();
+  });
+
   it("explains a load failure and retries", async () => {
     list.mockRejectedValueOnce(new Error("Network error. Check your connection."));
     await renderLibrary();
@@ -310,7 +326,7 @@ describe("marking a chapter as read from NEW FOR YOU", () => {
     recentChapters.mockRejectedValue(new Error("Network error."));
     await fireEvent.press(card);
 
-    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't mark it as read. Check your connection.", ToastAndroid.LONG));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't mark it as read. Check your connection and try again later.", ToastAndroid.LONG));
     // nothing was lost: the card is back and the row is still behind
     expect(await screen.findByRole("button", CARD)).toBeTruthy();
     expect(screen.getByText("+3")).toBeTruthy();

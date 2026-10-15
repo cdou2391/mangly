@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { useQuery } from "@tanstack/react-query";
 import { trackingApi } from "@/api/endpoints";
+import { useOnline } from "@/api/reachability";
 import { useAuth } from "@/auth/AuthContext";
 import { WEB_URL } from "@/config";
 import { Screen } from "@/components/ui";
@@ -20,6 +21,7 @@ const VERSION = Constants.expoConfig?.version ?? "dev";
 export default function Settings() {
   const { state, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  const online = useOnline();
   // The library list is already kept fresh by every screen that changes it, so the numbers are counted from it
   // rather than from a separate stats request that would go stale.
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
@@ -64,6 +66,7 @@ export default function Settings() {
           </View>
 
           <SettingsGroup title="HELP & ABOUT">
+            <SettingsRow icon={online ? "cloud-done-outline" : "cloud-offline-outline"} label="Connection" value={online ? "Online" : "Offline"} warn={!online} />
             <SettingsRow icon="globe-outline" label="MangaPulse on the web" onPress={() => WebBrowser.openBrowserAsync(WEB_URL)} />
             <SettingsRow icon="key-outline" label="Reset password" onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/forgot-password`)} />
             <SettingsRow icon="information-circle-outline" label="Version" value={VERSION} last />

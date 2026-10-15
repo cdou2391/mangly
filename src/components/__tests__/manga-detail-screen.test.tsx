@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import MangaDetail from "@/app/manga/[id]";
 import { trackingApi } from "@/api/endpoints";
+import { ApiError } from "@/api/client";
 import type { TrackedManga } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({ trackingApi: { list: jest.fn(), update: jest.fn(), remove: jest.fn() } }));
@@ -28,9 +29,9 @@ function item(over: Partial<TrackedManga> = {}, manga: Partial<TrackedManga["man
 }
 
 const metrics = { frame: { x: 0, y: 0, width: 412, height: 915 }, insets: { top: 24, left: 0, right: 0, bottom: 0 } };
-const renderDetail = () =>
+const renderDetail = (client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } })) =>
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } })}>
+    <QueryClientProvider client={client}>
       <SafeAreaProvider initialMetrics={metrics}>
         <MangaDetail />
       </SafeAreaProvider>
@@ -154,11 +155,37 @@ describe("changing the title", () => {
     expect(update).toHaveBeenCalledWith(44, { notifications_enabled: false });
   });
 
+  it("asks the user to try again later when the server cannot be reached", async () => {
+    update.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Completed" }));
+    expect(await screen.findByText("Can't reach MangaPulse. Check your connection and try again later.")).toBeTruthy();
+  });
+
   it("shows why a change failed", async () => {
     update.mockRejectedValue(new Error("Network error. Check your connection."));
     await renderDetail();
     await fireEvent.press(await screen.findByRole("button", { name: "Completed" }));
     expect(await screen.findByText("Network error. Check your connection.")).toBeTruthy();
+  });
+});
+
+describe("when the server cannot be reached", () => {
+  it("shows the saved title instead of an error", async () => {
+    list.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { gcTime: 0 } } });
+    client.setQueryData(["tracked"], [item()]);
+    await renderDetail(client);
+    await waitFor(() => expect(list).toHaveBeenCalled()); // the refresh was tried and failed
+    await waitFor(() => expect(client.getQueryState(["tracked"])?.status).toBe("error"));
+    expect(screen.getByText("Naruto")).toBeTruthy();
+    expect(screen.queryByText("Couldn't load this title")).toBeNull();
+  });
+
+  it("still says so when there is nothing saved either", async () => {
+    list.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    await renderDetail();
+    expect(await screen.findByText("Couldn't load this title")).toBeTruthy();
   });
 });
 

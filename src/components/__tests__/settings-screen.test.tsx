@@ -1,11 +1,12 @@
 import { Alert } from "react-native";
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import Settings from "@/app/(tabs)/settings";
 import { useAuth } from "@/auth/AuthContext";
 import { trackingApi } from "@/api/endpoints";
+import { setOnline } from "@/api/reachability";
 import type { ReadingStatus, TrackedManga, User } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({ trackingApi: { list: jest.fn() } }));
@@ -41,6 +42,7 @@ const renderSettings = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  setOnline(true);
   signedIn();
   list.mockResolvedValue([tracked(1, "reading"), tracked(2, "reading"), tracked(3, "completed"), tracked(4, "plan_to_read")]);
 });
@@ -108,6 +110,41 @@ describe("help and about", () => {
   it("shows the app version", async () => {
     await renderSettings();
     expect(await screen.findByLabelText("Version, 1.2.3")).toBeTruthy();
+  });
+});
+
+describe("the connection", () => {
+  it("says Online when the server is reachable", async () => {
+    await renderSettings();
+    expect(await screen.findByLabelText("Connection, Online")).toBeTruthy();
+  });
+
+  it("says Offline when it is not, and goes back to Online by itself", async () => {
+    setOnline(false);
+    await renderSettings();
+    expect(await screen.findByLabelText("Connection, Offline")).toBeTruthy();
+    expect(screen.queryByLabelText("Connection, Online")).toBeNull();
+    await act(async () => setOnline(true));
+    expect(screen.getByLabelText("Connection, Online")).toBeTruthy();
+  });
+
+  it("still shows the library numbers from the saved copy while offline", async () => {
+    setOnline(false);
+    list.mockRejectedValue(new Error("offline"));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["tracked"], [tracked(1, "reading"), tracked(2, "completed")]);
+    await render(
+      <QueryClientProvider client={client}>
+        <SafeAreaProvider initialMetrics={metrics}>
+          <Settings />
+        </SafeAreaProvider>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByLabelText("Connection, Offline")).toBeTruthy();
+    await waitFor(() => expect(list).toHaveBeenCalled()); // the refresh was tried and failed
+    expect(await screen.findByLabelText("2 Tracked")).toBeTruthy();
+    expect(screen.getByLabelText("1 Reading")).toBeTruthy();
+    expect(screen.queryByText(/Couldn't load your library numbers/)).toBeNull();
   });
 });
 

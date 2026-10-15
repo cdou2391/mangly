@@ -243,7 +243,7 @@ describe("opening a chapter", () => {
     recentChapters.mockRejectedValue(new Error("Network error."));
     listTracked.mockRejectedValue(new Error("Network error."));
     await fireEvent.press(item);
-    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't mark it as read. Check your connection.", ToastAndroid.LONG));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't mark it as read. Check your connection and try again later.", ToastAndroid.LONG));
     expect(await row(/^Chainsaw Man\. Ch\. 191\..*\bnew\b/)).toBeTruthy();
     expect(screen.getByText("3 new")).toBeTruthy();
     jest.restoreAllMocks();
@@ -296,7 +296,7 @@ describe("mark all read", () => {
     recentChapters.mockRejectedValue(new Error("Network error."));
     listTracked.mockRejectedValue(new Error("Network error."));
     await answer("Mark all read");
-    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't mark everything as read. Check your connection.", ToastAndroid.LONG));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't mark everything as read. Check your connection and try again later.", ToastAndroid.LONG));
     expect(await row(/^Chainsaw Man\. Ch\. 191\..*\bnew\b/)).toBeTruthy();
     expect(screen.getByText("3 new")).toBeTruthy();
     toast.mockRestore();

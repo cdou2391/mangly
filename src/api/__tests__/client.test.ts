@@ -1,4 +1,5 @@
-import { ApiError, api, applySession, request, restoreSession, setAccessToken, setSessionListener } from "../client";
+import { ApiError, UNREACHABLE_MESSAGE, api, applySession, ping, request, restoreSession, setAccessToken, setSessionListener } from "../client";
+import { isOnline, setOnline } from "../reachability";
 import type { TokenPair } from "../types";
 
 const store: Record<string, string> = {};
@@ -32,6 +33,7 @@ beforeEach(() => {
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   setAccessToken(null);
   setSessionListener(() => {});
+  setOnline(true);
 });
 
 describe("request", () => {
@@ -111,7 +113,15 @@ describe("refresh on 401", () => {
       .mockResolvedValueOnce(json(401, { detail: "expired" }))
       .mockRejectedValueOnce(new TypeError("Network request failed"));
 
-    await expect(api.get("/tracked-manga")).rejects.toMatchObject({ status: 401 });
+    // not a "401": the token was never refused, the server could not be asked
+    await expect(api.get("/tracked-manga")).rejects.toMatchObject({ status: 0, message: UNREACHABLE_MESSAGE });
+    expect(store["mangly.refresh_token"]).toBe("refresh-1");
+  });
+
+  it("reports a server error during the refresh as a connection problem too, and keeps the token", async () => {
+    await applySession(pair(1));
+    fetchMock.mockResolvedValueOnce(json(401, { detail: "expired" })).mockResolvedValueOnce(json(503, {}));
+    await expect(api.get("/tracked-manga")).rejects.toMatchObject({ status: 0, message: UNREACHABLE_MESSAGE });
     expect(store["mangly.refresh_token"]).toBe("refresh-1");
   });
 
@@ -220,5 +230,47 @@ describe("restoreSession", () => {
     const [a, b] = await Promise.all([restoreSession(), restoreSession()]);
     expect([a, b]).toEqual(["ok", "ok"]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("reachability", () => {
+  it("is offline after a request fails to connect, with a message that says to try again later", async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError("Network request failed"));
+    await expect(api.post("/tracked-manga/from-source", {})).rejects.toMatchObject({ status: 0, message: UNREACHABLE_MESSAGE });
+    expect(UNREACHABLE_MESSAGE).toMatch(/try again later/i);
+    expect(isOnline()).toBe(false);
+  });
+
+  it("is offline after a timeout", async () => {
+    fetchMock.mockRejectedValueOnce(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    await expect(api.get("/tracked-manga")).rejects.toMatchObject({ status: 0, message: UNREACHABLE_MESSAGE });
+    expect(isOnline()).toBe(false);
+  });
+
+  it("is online again as soon as the server answers, whatever it says", async () => {
+    setOnline(false);
+    fetchMock.mockResolvedValueOnce(json(409, { detail: "Already tracked" }));
+    await expect(api.post("/tracked-manga/from-source", {})).rejects.toMatchObject({ status: 409 });
+    expect(isOnline()).toBe(true);
+  });
+
+  it("is offline when the proxy in front of the server answers for it", async () => {
+    fetchMock.mockResolvedValueOnce(json(502, {}));
+    await expect(api.get("/tracked-manga")).rejects.toMatchObject({ status: 502 });
+    expect(isOnline()).toBe(false);
+  });
+
+  it("pings the health endpoint without a token", async () => {
+    setAccessToken("abc");
+    fetchMock.mockResolvedValueOnce(json(200, { status: "ok" }));
+    expect(await ping()).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/health$/);
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get("Authorization")).toBeNull();
+  });
+
+  it("pings false, and goes offline, when nothing answers", async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError("Network request failed"));
+    expect(await ping()).toBe(false);
+    expect(isOnline()).toBe(false);
   });
 });
