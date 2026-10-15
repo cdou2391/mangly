@@ -31,7 +31,7 @@ function Routes({ ready }: { ready: boolean }) {
       <Stack.Screen name="index" />
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="manga/[id]" options={{ headerShown: true, title: "" }} />
+        <Stack.Screen name="manga/[id]" />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="(auth)" />
