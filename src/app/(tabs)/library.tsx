@@ -9,9 +9,11 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { FilterChips } from "@/components/library/FilterChips";
 import { LibraryRow } from "@/components/library/LibraryRow";
 import { NewRail } from "@/components/library/NewRail";
+import { PopularRail } from "@/components/library/PopularRail";
 import { countByFilter, sortLibrary, type LibraryFilter } from "@/utils/library";
 import { FILTERS } from "@/utils/library";
 import { useOpenChapter } from "@/hooks/useOpenChapter";
+import { SPARSE_LIBRARY, useFollowPopular, usePopular } from "@/hooks/usePopular";
 import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
 import { fromRecent } from "@/utils/feed";
 import { palette } from "@/theme";
@@ -25,6 +27,10 @@ export default function Library() {
   const feed = useUpdatesFeed();
 
   const items = tracked.data;
+  // Suggestions for a library that is empty or nearly so; only asked for once the library is known.
+  const sparse = tracked.isSuccess && (items?.length ?? 0) < SPARSE_LIBRARY;
+  const popular = usePopular(sparse);
+  const { states: followStates, follow } = useFollowPopular();
   const sorted = useMemo(() => sortLibrary(items ?? []), [items]);
   const counts = useMemo(() => countByFilter(items ?? []), [items]);
   const shown = filter === "all" ? sorted : sorted.filter((i) => i.reading_status === filter);
@@ -87,6 +93,7 @@ export default function Library() {
         data={tracked.isLoading ? [] : shown}
         keyExtractor={(i) => String(i.id)}
         ListHeaderComponent={header}
+        ListFooterComponent={sparse ? <PopularRail titles={popular.data ?? []} states={followStates} onFollow={follow} /> : null}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={tracked.isRefetching} onRefresh={refresh} tintColor={palette.primary} colors={[palette.primary]} progressBackgroundColor={palette.card} />}
         renderItem={({ item }) => (

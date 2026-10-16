@@ -38,6 +38,18 @@ export interface Manga {
   updated_at: string;
 }
 
+/** A title other readers follow (GET /manga/popular). `id` is the manga id, which POST /tracked-manga accepts. */
+export interface PopularManga {
+  id: number;
+  title: string;
+  cover_url: string | null;
+  author: string | null;
+  status: string | null;
+  genres: string[];
+  latest_chapter: string | null;
+  readers: number;
+}
+
 export interface MangaSourceRecord {
   id: number;
   manga_id: number;

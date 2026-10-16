@@ -124,3 +124,12 @@ The app can be opened and read when the server cannot be reached. It is a copy, 
 **Writes are never queued.** Changing a status, toggling alerts, removing a title, marking chapters read and adding from Search all go to the server. If it cannot be reached the request fails with "Can't reach MangaPulse. Check your connection and try again later." (a toast for marking read, an inline message elsewhere) and the screen goes back to what it was. Signing out while offline signs out on the device (the copy and token are deleted); the server-side session is not revoked and expires on its own.
 
 **Known limits.** An optimistic edit that is saved to disk a second before the app is killed offline can survive as the saved state until the next refresh. A user who is offline for more than 7 days must reach the server once before the app opens.
+
+## Popular on MangaPulse (suggestions for a new library)
+
+An empty library is a dead end, so the Library shows a rail of titles other readers follow, under the empty message.
+
+- **Source:** `GET /manga/popular?limit=10` (MangaPulse). Ranked by the number of active readers who follow a title and have not dropped it; it leaves out titles the caller already follows and titles with nothing to scrape. It returns the manga `id`, the card fields and a reader count, never who the readers are. No AI, no quota.
+- **When:** only while the library has fewer than 3 titles (`SPARSE_LIBRARY`), and only after the library itself has loaded, so an established user never makes the request.
+- **Track:** the card's Track button calls the existing `POST /tracked-manga` with the `id`. The card leaves the rail at once and the library refreshes; "already followed" (409) counts as done; a failure keeps the card (button reads "Try again") with an Android toast. At 3 titles the rail goes away.
+- **It is a suggestion, not a feature to depend on:** offline, on any error, or with nothing to suggest, there is no rail and no error message. It is not part of the offline copy.

@@ -2,6 +2,7 @@ import { api, applySession, dropSession } from "./client";
 import { tokenStore } from "@/auth/tokenStore";
 import type {
   AppNotification,
+  PopularManga,
   RecentChapter,
   RegisterRequest,
   SearchCandidate,
@@ -44,6 +45,7 @@ export const trackingApi = {
   list: () => api.get<TrackedManga[]>("/tracked-manga"),
   stats: () => api.get<TrackingStats>("/tracked-manga/stats"),
   recentChapters: () => api.get<RecentChapter[]>("/tracked-manga/recent-chapters"),
+  track: (manga_id: number) => api.post<TrackedManga>("/tracked-manga", { manga_id }),
   fromSource: (body: TrackFromSourceRequest) => api.post<TrackedManga>("/tracked-manga/from-source", body),
   update: (id: number, body: TrackedMangaUpdate) => api.patch<TrackedManga>(`/tracked-manga/${id}`, body),
   remove: (id: number) => api.delete<void>(`/tracked-manga/${id}`),
@@ -52,6 +54,7 @@ export const trackingApi = {
 export const mangaApi = {
   search: (q: string, source = "all") =>
     api.get<SearchCandidate[]>(`/manga/search?q=${encodeURIComponent(q)}&source=${encodeURIComponent(source)}`),
+  popular: (limit = 10) => api.get<PopularManga[]>(`/manga/popular?limit=${limit}`),
 };
 
 export const notificationsApi = {

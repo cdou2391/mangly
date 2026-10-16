@@ -9,7 +9,8 @@ import { notificationsApi, trackingApi } from "@/api/endpoints";
 import type { AppNotification, RecentChapter, TrackedManga } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({
-  trackingApi: { list: jest.fn(), recentChapters: jest.fn(), update: jest.fn() },
+  trackingApi: { list: jest.fn(), recentChapters: jest.fn(), update: jest.fn(), track: jest.fn() },
+  mangaApi: { popular: jest.fn(async () => []) },
   notificationsApi: { list: jest.fn(), markRead: jest.fn() },
 }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
