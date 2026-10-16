@@ -11,18 +11,18 @@ beforeEach(() => {
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 });
 
-describe("popular titles", () => {
-  it("asks for ten by default, or as many as given", async () => {
+describe("home picks", () => {
+  it("asks for eight by default, or as many as given", async () => {
     fetchMock.mockResolvedValue(json([]));
-    await mangaApi.popular();
-    expect(call().url).toMatch(/\/manga\/popular\?limit=10$/);
+    await mangaApi.homePicks();
+    expect(call().url).toMatch(/\/manga\/home-picks\?limit=8$/);
     fetchMock.mockClear();
     fetchMock.mockResolvedValue(json([]));
-    await mangaApi.popular(4);
-    expect(call().url).toMatch(/\/manga\/popular\?limit=4$/);
+    await mangaApi.homePicks(4);
+    expect(call().url).toMatch(/\/manga\/home-picks\?limit=4$/);
   });
 
-  it("is followed by sending the manga id to the tracking list", async () => {
+  it("a pick is followed by sending the manga id to the tracking list", async () => {
     fetchMock.mockResolvedValue(json({ id: 1 }, 201));
     await trackingApi.track(7);
     expect(call().url).toMatch(/\/tracked-manga$/);

@@ -38,8 +38,12 @@ export interface Manga {
   updated_at: string;
 }
 
-/** A title other readers follow (GET /manga/popular). `id` is the manga id, which POST /tracked-manga accepts. */
-export interface PopularManga {
+/**
+ * A recommendation for the home screen (GET /manga/home-picks). `id` is the manga id, which POST /tracked-manga accepts.
+ * "similar" picks resemble a title in the reader's library (`because`, `reason`); "popular" ones are followed by other readers.
+ */
+export interface HomePick {
+  kind: "similar" | "popular";
   id: number;
   title: string;
   cover_url: string | null;
@@ -47,7 +51,9 @@ export interface PopularManga {
   status: string | null;
   genres: string[];
   latest_chapter: string | null;
-  readers: number;
+  because: string | null;
+  reason: string | null;
+  readers: number | null;
 }
 
 export interface MangaSourceRecord {

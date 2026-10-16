@@ -125,11 +125,11 @@ The app can be opened and read when the server cannot be reached. It is a copy, 
 
 **Known limits.** An optimistic edit that is saved to disk a second before the app is killed offline can survive as the saved state until the next refresh. A user who is offline for more than 7 days must reach the server once before the app opens.
 
-## Popular on MangaPulse (suggestions for a new library)
+## Home hero (recommendations)
 
-An empty library is a dead end, so the Library shows a rail of titles other readers follow, under the empty message.
+The top of the Library is a swipeable hero of recommended titles, with the new-chapters section under it. Each card has a label, **SIMILAR** or **POPULAR**.
 
-- **Source:** `GET /manga/popular?limit=10` (MangaPulse). Ranked by the number of active readers who follow a title and have not dropped it; it leaves out titles the caller already follows and titles with nothing to scrape. It returns the manga `id`, the card fields and a reader count, never who the readers are. No AI, no quota.
-- **When:** only while the library has fewer than 3 titles (`SPARSE_LIBRARY`), and only after the library itself has loaded, so an established user never makes the request.
-- **Track:** the card's Track button calls the existing `POST /tracked-manga` with the `id`. The card leaves the rail at once and the library refreshes; "already followed" (409) counts as done; a failure keeps the card (button reads "Try again") with an Android toast. At 3 titles the rail goes away.
-- **It is a suggestion, not a feature to depend on:** offline, on any error, or with nothing to suggest, there is no rail and no error message. It is not part of the offline copy.
+- **Source:** one request, `GET /manga/home-picks?limit=8` (MangaPulse). The server alternates *similar* picks (genre overlap with the reader's best-rated, most recently touched titles, two picks per seed, up to two seeds; labelled "Because you read X") with *popular* ones (most followed by other active readers). Never what the reader already follows, never a title with nothing to scrape, and every pick has a manga id. A reader with no library gets popular only. It is free: no AI, no quota. (`/manga/popular`, used by an earlier version of the app, is still there.)
+- **Track:** the card's Track button calls the existing `POST /tracked-manga` with the `id`. The card leaves the hero at once, the library refreshes and the picks are asked for again (the library changed, so what is similar to it has too). "Already followed" (409) counts as done; a failure keeps the card (button reads "Try again") with an Android toast.
+- **Everyone, not only new readers.** Pull to refresh asks for new picks.
+- **It is a suggestion, not a feature to depend on:** offline, on any error (including a server that does not have the endpoint yet) or with nothing to suggest, there is no hero and no error message. Not part of the offline copy.
