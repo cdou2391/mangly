@@ -8,6 +8,8 @@ import { palette } from "@/theme";
 
 const SIDE = 20;
 const GAP = 12;
+/** How much of the next card shows beside the current one: it says "there is more", and shortens the swipe to it. */
+const PEEK = 32;
 const HEIGHT = 236;
 
 /** The label on a card. */
@@ -37,9 +39,10 @@ export function HeroPicks({
   const [index, setIndex] = useState(0);
   if (picks.length === 0) return null;
 
-  const cardWidth = width - SIDE * 2;
+  const cardWidth = width - SIDE - GAP - PEEK;
   const step = cardWidth + GAP;
-  const onEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) =>
+  // Follows the scroll itself (not only where a swipe comes to rest), so the dots are right however the card was reached.
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) =>
     setIndex(Math.max(0, Math.min(picks.length - 1, Math.round(e.nativeEvent.contentOffset.x / step))));
 
   return (
@@ -50,8 +53,16 @@ export function HeroPicks({
         keyExtractor={(p) => String(p.id)}
         showsHorizontalScrollIndicator={false}
         snapToInterval={step}
+        snapToAlignment="start"
         decelerationRate="fast"
-        onMomentumScrollEnd={onEnd}
+        // Any swipe moves to the next card, however short or slow: a card is almost as wide as the screen, so an
+        // ordinary swipe is well short of halfway, which would otherwise snap straight back.
+        disableIntervalMomentum
+        // This list is inside the Library's vertical list; without this, Android can hand the gesture to the parent.
+        nestedScrollEnabled
+        onScroll={onScroll}
+        scrollEventThrottle={32}
+        testID="hero-list"
         contentContainerStyle={{ paddingHorizontal: SIDE, gap: GAP }}
         renderItem={({ item }) => {
           const state = states[item.id];

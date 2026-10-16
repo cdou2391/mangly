@@ -1,4 +1,4 @@
-import { Platform, ToastAndroid } from "react-native";
+import { Dimensions, Platform, ToastAndroid } from "react-native";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -99,6 +99,36 @@ describe("the hero", () => {
     expect(screen.queryByTestId("hero-dots", { includeHiddenElements: true })).toBeNull();
     await rerender(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} states={{}} onFollow={jest.fn()} />);
     expect(screen.getByTestId("hero-dots", { includeHiddenElements: true }).children).toHaveLength(2);
+  });
+});
+
+describe("scrolling", () => {
+  const scrollTo = (x: number) => fireEvent.scroll(screen.getByTestId("hero-list"), { nativeEvent: { contentOffset: { x, y: 0 } } });
+  const activeDot = () =>
+    screen.getByTestId("hero-dots", { includeHiddenElements: true }).children.findIndex((c) => JSON.stringify((c as unknown as { props: { style: unknown } }).props.style).includes("18"));
+
+  it("is a horizontal list that snaps from card to card", async () => {
+    await render(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} states={{}} onFollow={jest.fn()} />);
+    const list = screen.getByTestId("hero-list");
+    expect(list.props.horizontal).toBe(true);
+    expect(list.props.decelerationRate).toBe("fast"); // settles on a card instead of coasting past it
+    expect(list.props.disableIntervalMomentum).toBe(true); // one card per swipe, however short
+    expect(list.props.nestedScrollEnabled).toBe(true); // it is inside the vertical list; Android needs this to hand it the gesture
+    expect(list.props.snapToInterval).toBe(Dimensions.get("window").width - 20 - 12 - 32 + 12); // a card plus the gap, with the next card peeking
+  });
+
+  it("moves the page dot with the scroll position, however far a swipe went", async () => {
+    await render(<HeroPicks picks={[pick(1, "A"), pick(2, "B"), pick(3, "C")]} states={{}} onFollow={jest.fn()} />);
+    expect(activeDot()).toBe(0);
+    const step = (screen.getByTestId("hero-list").props.snapToInterval as number);
+    await scrollTo(step);
+    expect(activeDot()).toBe(1);
+    await scrollTo(step * 2 + 4);
+    expect(activeDot()).toBe(2);
+    await scrollTo(step * 9); // overscroll never points past the last card
+    expect(activeDot()).toBe(2);
+    await scrollTo(-40);
+    expect(activeDot()).toBe(0);
   });
 });
 
