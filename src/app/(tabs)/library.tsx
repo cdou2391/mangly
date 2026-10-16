@@ -90,6 +90,9 @@ export default function Library() {
     <Screen padded={false}>
       <FlatList
         testID="library-list"
+        // Android detaches off-screen views of a long list to save memory; with lists nested in the header that can leave blank
+        // space or missing cards when the content above changes height (a new-chapter row appearing, for one).
+        removeClippedSubviews={false}
         data={tracked.isLoading ? [] : shown}
         keyExtractor={(i) => String(i.id)}
         ListHeaderComponent={header}

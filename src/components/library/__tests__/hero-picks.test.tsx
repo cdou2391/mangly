@@ -1,5 +1,5 @@
-import { Dimensions, Platform, ToastAndroid } from "react-native";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Dimensions, Platform, StyleSheet, ToastAndroid } from "react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Library from "@/app/(tabs)/library";
@@ -107,20 +107,30 @@ describe("scrolling", () => {
   const activeDot = () =>
     screen.getByTestId("hero-dots", { includeHiddenElements: true }).children.findIndex((c) => JSON.stringify((c as unknown as { props: { style: unknown } }).props.style).includes("18"));
 
-  it("is a horizontal list that snaps from card to card", async () => {
+  it("is a horizontal pager, one screen per title, that Android can hand the gesture to", async () => {
     await render(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} states={{}} onFollow={jest.fn()} />);
     const list = screen.getByTestId("hero-list");
     expect(list.props.horizontal).toBe(true);
-    expect(list.props.decelerationRate).toBe("fast"); // settles on a card instead of coasting past it
-    expect(list.props.disableIntervalMomentum).toBe(true); // one card per swipe, however short
+    expect(list.props.pagingEnabled).toBe(true);
     expect(list.props.nestedScrollEnabled).toBe(true); // it is inside the vertical list; Android needs this to hand it the gesture
-    expect(list.props.snapToInterval).toBe(Dimensions.get("window").width - 20 - 12 - 32 + 12); // a card plus the gap, with the next card peeking
+    expect(list.props.snapToInterval).toBeUndefined(); // plain paging, no snapping arithmetic to get wrong
+  });
+
+  it("makes every page as wide as the screen, with no side margin, and puts the title inside it", async () => {
+    await render(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} states={{}} onFollow={jest.fn()} />);
+    const page = screen.getByLabelText(/^One\./);
+    const flat = StyleSheet.flatten(page.props.style);
+    expect(flat.width).toBe(Dimensions.get("window").width);
+    expect(flat.borderRadius).toBeUndefined();
+    expect(flat.margin).toBeUndefined();
+    expect(flat.marginHorizontal).toBeUndefined();
+    expect(within(page).getByText("One")).toBeTruthy(); // the title is inside the page, not under it
   });
 
   it("moves the page dot with the scroll position, however far a swipe went", async () => {
     await render(<HeroPicks picks={[pick(1, "A"), pick(2, "B"), pick(3, "C")]} states={{}} onFollow={jest.fn()} />);
     expect(activeDot()).toBe(0);
-    const step = (screen.getByTestId("hero-list").props.snapToInterval as number);
+    const step = Dimensions.get("window").width;
     await scrollTo(step);
     expect(activeDot()).toBe(1);
     await scrollTo(step * 2 + 4);
@@ -133,6 +143,15 @@ describe("scrolling", () => {
 });
 
 describe("in the Library", () => {
+  it("does not let Android detach views of the list, which can leave the hero missing when the content above changes", async () => {
+    const original = Platform.OS;
+    Platform.OS = "android"; // where a list detaches clipped views unless told not to
+    await renderLibrary();
+    await screen.findByText("Berserk");
+    expect(screen.getByTestId("library-list").props.removeClippedSubviews).toBe(false);
+    Platform.OS = original;
+  });
+
   it("is at the top for everyone, with the new-chapters section under it", async () => {
     (trackingApi.recentChapters as jest.Mock).mockResolvedValue([
       { tracking_id: 1, manga_id: 1, manga_title: "Mine 1", manga_cover_url: null, chapter: "2", chapter_url: null, chapter_at: NOW, source: "mangaread", is_new: true },
