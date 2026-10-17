@@ -1,4 +1,4 @@
-import { Alert } from "react-native";
+import { Alert, StyleSheet } from "react-native";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -167,6 +167,169 @@ describe("changing the title", () => {
     await renderDetail();
     await fireEvent.press(await screen.findByRole("button", { name: "Completed" }));
     expect(await screen.findByText("Network error. Check your connection.")).toBeTruthy();
+  });
+});
+
+describe("the rating", () => {
+  /** A server that keeps what it is sent: the next time the library is read, the rating is what was last saved. */
+  const serverKeepsRatings = (start: number | null = null) => {
+    let saved = start;
+    list.mockImplementation(async () => [item({ rating: saved })]);
+    update.mockImplementation(async (_id: number, body: { rating?: number | null }) => {
+      if ("rating" in body) saved = body.rating ?? null;
+      return {};
+    });
+  };
+  const stars = () => [1, 2, 3, 4, 5].map((n) => screen.getByRole("radio", { name: n === 1 ? "Rate 1 star" : `Rate ${n} stars` }));
+
+  /** Which stars are lit: a lit star is drawn in the accent colour, an unlit one is dim. */
+  const lit = () =>
+    stars().map((star) => {
+      const glyph = star.children[0] as unknown as { props: { style: unknown } };
+      return (StyleSheet.flatten(glyph.props.style as never) as { color?: string }).color === "#FF2A2A";
+    });
+
+  it("lights every star up to the rating, and none when there is none", async () => {
+    list.mockResolvedValue([item({ rating: 3 })]);
+    await renderDetail();
+    await screen.findByText("3 out of 5");
+    expect(lit()).toEqual([true, true, true, false, false]);
+  });
+
+  it("starts as not rated: five stars, a hint, and nothing to clear", async () => {
+    await renderDetail();
+    expect(await screen.findByText("YOUR RATING")).toBeTruthy();
+    expect(stars()).toHaveLength(5);
+    expect(screen.getByText("Not rated yet")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Clear rating" })).toBeNull();
+    expect(stars().every((s) => s.props.accessibilityState.selected === false)).toBe(true);
+    expect(lit()).toEqual([false, false, false, false, false]);
+  });
+
+  it("shows the rating you gave, and marks that star as the chosen one", async () => {
+    list.mockResolvedValue([item({ rating: 4 })]);
+    await renderDetail();
+    expect(await screen.findByText("4 out of 5")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Rate 4 stars" }).props.accessibilityState).toMatchObject({ selected: true, checked: true });
+    expect(screen.getByRole("radio", { name: "Rate 3 stars" }).props.accessibilityState.selected).toBe(false);
+    expect(screen.getByLabelText("Your rating. 4 out of 5.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Clear rating" })).toBeTruthy();
+  });
+
+  it("rates the title with the star tapped, and says so at once", async () => {
+    serverKeepsRatings();
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("radio", { name: "Rate 3 stars" }));
+    expect(update).toHaveBeenCalledWith(44, { rating: 3 });
+    expect(await screen.findByText("3 out of 5")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Rate 3 stars" }).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByRole("button", { name: "Clear rating" })).toBeTruthy();
+  });
+
+  it("changes the rating when another star is tapped", async () => {
+    serverKeepsRatings(2);
+    await renderDetail();
+    expect(await screen.findByText("2 out of 5")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("radio", { name: "Rate 5 stars" }));
+    expect(update).toHaveBeenLastCalledWith(44, { rating: 5 });
+    expect(await screen.findByText("5 out of 5")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("radio", { name: "Rate 1 star" }));
+    expect(update).toHaveBeenLastCalledWith(44, { rating: 1 });
+    expect(await screen.findByText("1 out of 5")).toBeTruthy();
+  });
+
+  it("takes the rating back with Clear rating, by sending an explicit null", async () => {
+    serverKeepsRatings(4);
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Clear rating" }));
+    expect(update).toHaveBeenCalledWith(44, { rating: null });
+    expect(await screen.findByText("Not rated yet")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Clear rating" })).toBeNull();
+  });
+
+  it("can be rated again after it was cleared", async () => {
+    serverKeepsRatings(4);
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Clear rating" }));
+    await screen.findByText("Not rated yet");
+    await fireEvent.press(screen.getByRole("radio", { name: "Rate 2 stars" }));
+    expect(await screen.findByText("2 out of 5")).toBeTruthy();
+  });
+
+  it("shows the new rating while it is still being saved, and puts the old one back if saving fails", async () => {
+    let fail!: (e: Error) => void;
+    list.mockResolvedValue([item({ rating: 4 })]);
+    update.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("radio", { name: "Rate 2 stars" }));
+    expect(await screen.findByText("2 out of 5")).toBeTruthy(); // before the server has answered
+    expect(screen.queryByText("4 out of 5")).toBeNull();
+    await act(async () => fail(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later.")));
+    expect(await screen.findByText("4 out of 5")).toBeTruthy();
+    expect(screen.queryByText("2 out of 5")).toBeNull();
+  });
+
+  it("shows the rating as cleared while that is still being saved, and brings it back if saving fails", async () => {
+    let fail!: (e: Error) => void;
+    list.mockResolvedValue([item({ rating: 3 })]);
+    update.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Clear rating" }));
+    expect(await screen.findByText("Not rated yet")).toBeTruthy();
+    await act(async () => fail(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later.")));
+    expect(await screen.findByText("3 out of 5")).toBeTruthy();
+  });
+
+  it("is put back, with the reason, when it cannot be saved", async () => {
+    list.mockResolvedValue([item({ rating: 4 })]);
+    update.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("radio", { name: "Rate 1 star" }));
+    expect(await screen.findByText("Can't reach MangaPulse. Check your connection and try again later.")).toBeTruthy();
+    expect(await screen.findByText("4 out of 5")).toBeTruthy(); // back to what it was
+  });
+
+  it("is put back even when the library cannot be read again afterwards (offline)", async () => {
+    list.mockResolvedValueOnce([item({ rating: 4 })]).mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    update.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("radio", { name: "Rate 1 star" }));
+    expect(await screen.findByText(/try again later/)).toBeTruthy();
+    // nothing from the server can repair the screen now, so only putting it back can
+    expect(await screen.findByText("4 out of 5")).toBeTruthy();
+    expect(lit()).toEqual([true, true, true, true, false]);
+  });
+
+  it("is put back when taking it back cannot be saved", async () => {
+    list.mockResolvedValue([item({ rating: 3 })]);
+    update.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Clear rating" }));
+    expect(await screen.findByText(/try again later/)).toBeTruthy();
+    expect(await screen.findByText("3 out of 5")).toBeTruthy();
+  });
+
+  it("does not take new taps while one is being saved", async () => {
+    let finish!: () => void;
+    list.mockResolvedValue([item({ rating: null })]);
+    update.mockReturnValue(new Promise((resolve) => (finish = () => resolve({}))));
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("radio", { name: "Rate 3 stars" }));
+    try {
+      await waitFor(() => expect(screen.getByRole("radio", { name: "Rate 5 stars" }).props.accessibilityState.disabled).toBe(true));
+      await fireEvent.press(screen.getByRole("radio", { name: "Rate 5 stars" }));
+      expect(update).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => finish());
+    }
+  });
+
+  it("never touches the other things on the page: only the rating is sent", async () => {
+    serverKeepsRatings();
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("radio", { name: "Rate 4 stars" }));
+    expect(update).toHaveBeenCalledWith(44, { rating: 4 });
+    expect(Object.keys(update.mock.calls[0][1])).toEqual(["rating"]);
   });
 });
 

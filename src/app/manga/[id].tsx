@@ -5,9 +5,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as WebBrowser from "expo-web-browser";
 import { trackingApi } from "@/api/endpoints";
-import type { ReadingStatus } from "@/api/types";
+import type { ReadingStatus, TrackedManga } from "@/api/types";
 import { BackBar } from "@/components/detail/BackBar";
 import { Cover } from "@/components/Cover";
+import { RatingStars } from "@/components/detail/RatingStars";
 import { ErrorNote, Loading, Screen } from "@/components/ui";
 import { chapterToStore, parseChapter, readProgress, shortChapter } from "@/utils/chapters";
 import { sourceName } from "@/utils/sources";
@@ -40,6 +41,20 @@ export default function MangaDetail() {
       await invalidate();
       void qc.invalidateQueries({ queryKey: ["recent-chapters"] });
     },
+  });
+  // Rating a title (or taking the rating back, with null) shows at once and is put back if it cannot be saved.
+  const rate = useMutation<unknown, Error, number | null, { previous: TrackedManga[] | undefined }>({
+    mutationFn: (rating) => trackingApi.update(trackingId, { rating }),
+    onMutate: async (rating) => {
+      await qc.cancelQueries({ queryKey: ["tracked"] });
+      const previous = qc.getQueryData<TrackedManga[]>(["tracked"]);
+      qc.setQueryData<TrackedManga[]>(["tracked"], (list) => list?.map((i) => (i.id === trackingId ? { ...i, rating } : i)));
+      return { previous };
+    },
+    onError: (_error, _rating, context) => {
+      if (context?.previous) qc.setQueryData(["tracked"], context.previous);
+    },
+    onSettled: () => invalidate(),
   });
   const remove = useMutation({
     mutationFn: () => trackingApi.remove(trackingId),
@@ -187,6 +202,16 @@ export default function MangaDetail() {
               );
             })}
           </View>
+        </View>
+
+        <View>
+          <Text style={styles.sectionLabel}>YOUR RATING</Text>
+          <RatingStars value={item.rating} busy={rate.isPending} onRate={(n) => rate.mutate(n)} onClear={() => rate.mutate(null)} />
+          {rate.isError ? (
+            <Text accessibilityLiveRegion="polite" style={[styles.error, { marginTop: 8 }]}>
+              {rate.error.message}
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.row}>

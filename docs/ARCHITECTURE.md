@@ -145,3 +145,12 @@ The Library list under the hero and the new-chapters section can be searched, fi
 - **Sorting:** a button beside the search field opens a list of six orders: most unread first (the default), recently updated, recently added, title A to Z, Z to A, highest rated. The choice is remembered between launches (`mangly.library_sort` in secure storage; an unknown saved value means the default).
 - **Pages of ten** (`PAGE_SIZE`), with Previous / Next and "Page 2 of 3, 11–20 of 26" under the list; no pager when everything fits on one page. Any change to the search, a filter or the order goes back to page 1, a page that no longer exists (titles removed) becomes the last one, and changing page scrolls back up to the search field.
 - **Nothing found:** "No matches" (or "No titles here" for a filter alone) with a button that clears the search and filters.
+
+## Rating a title
+
+The title page has a **YOUR RATING** section: five stars to tap (1 to 5), the rating in words ("4 out of 5" or "Not rated yet"), and **Clear rating** once there is one.
+
+- **Rate / change:** tapping a star saves it (`PATCH /tracked-manga/{id}` with only `{ "rating": n }`); tapping another star changes it.
+- **Clear:** "Clear rating" sends `{ "rating": null }`. This needed a MangaPulse change: the API treated every null as "not sent" and so could never remove a rating. Now an explicit `rating: null` removes it, while leaving `rating` out leaves it alone and a null for any other field still means "leave it". Until that is deployed, clearing appears to work and then the rating comes back when the library is read again.
+- **Immediate, and put back on failure:** the new rating shows at once; if saving fails (offline, server trouble) it goes back to what it was with the usual "try again later" message, even when the library cannot be re-read. New taps wait while one is being saved.
+- The rating feeds the Library's "Highest rated" order, and the server's taste-judging (which needs at least three ratings).
