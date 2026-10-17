@@ -6,6 +6,7 @@ import { ErrorNote, Loading, Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { FeedFilter, type FeedFilterKey } from "@/components/updates/FeedFilter";
 import { FeedRow } from "@/components/updates/FeedRow";
+import { useClearReadAlerts } from "@/hooks/useClearReadAlerts";
 import { useMarkAllRead } from "@/hooks/useMarkChapterRead";
 import { useOpenChapter } from "@/hooks/useOpenChapter";
 import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
@@ -18,6 +19,7 @@ export default function Updates() {
   const feed = useUpdatesFeed();
   const openChapter = useOpenChapter();
   const markAll = useMarkAllRead();
+  const clearRead = useClearReadAlerts();
 
   const now = new Date();
   const shown = useMemo(() => (filter === "new" ? feed.items.filter((i) => i.unread) : feed.items), [filter, feed.items]);
@@ -30,6 +32,16 @@ export default function Updates() {
       [
         { text: "Cancel", style: "cancel" },
         { text: "Mark all read", onPress: () => markAll.mutate(feed.fresh) },
+      ],
+    );
+
+  const confirmClearRead = () =>
+    Alert.alert(
+      "Clear read alerts?",
+      `${feed.readAlertCount} ${feed.readAlertCount === 1 ? "alert you've" : "alerts you've"} already read will be removed from your history. Unread chapters and your reading progress are not touched.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Clear", style: "destructive", onPress: () => clearRead.mutate() },
       ],
     );
 
@@ -50,6 +62,19 @@ export default function Updates() {
         <Text style={styles.markAllText}>Mark all read</Text>
       </Pressable>
     ) : null;
+  const clearReadButton =
+    feed.readAlertCount > 0 ? (
+      <Pressable accessibilityRole="button" accessibilityLabel="Clear read alerts" hitSlop={6} onPress={confirmClearRead} disabled={clearRead.isPending} style={styles.clear}>
+        <Ionicons name="trash-outline" size={18} color={palette.muted} />
+      </Pressable>
+    ) : null;
+  const actions =
+    markAllButton || clearReadButton ? (
+      <View style={styles.actions}>
+        {markAllButton}
+        {clearReadButton}
+      </View>
+    ) : null;
 
   if (feed.error) {
     return (
@@ -62,7 +87,7 @@ export default function Updates() {
 
   const header = (
     <>
-      <ScreenHeader title="Updates" subtitle={subtitle} right={markAllButton} />
+      <ScreenHeader title="Updates" subtitle={subtitle} right={actions} />
       {feed.items.length > 0 ? (
         <FeedFilter value={filter} counts={{ all: feed.items.length, new: feed.unreadCount }} onChange={setFilter} />
       ) : null}
@@ -116,6 +141,8 @@ const styles = StyleSheet.create({
   cell: { paddingHorizontal: 20, marginBottom: 10 },
   group: { color: palette.muted, fontSize: 11.5, fontWeight: "800", letterSpacing: 2.4, paddingHorizontal: 20, marginTop: 16, marginBottom: 10 },
   markAll: { flexDirection: "row", alignItems: "center", gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,42,42,0.45)", backgroundColor: "rgba(255,42,42,0.08)" },
+  actions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  clear: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: palette.card },
   markAllText: { color: palette.primary, fontSize: 13, fontWeight: "700" },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 32 },
   emptyTitle: { color: palette.text, fontSize: 18, fontWeight: "800" },

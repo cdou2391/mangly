@@ -41,7 +41,7 @@ async function clearSettledAlerts(qc: QueryClient, c: ChapterTarget): Promise<vo
   }
 }
 
-const failToast = (message: string) => {
+export const failToast = (message: string) => {
   if (Platform.OS === "android") ToastAndroid.show(message, ToastAndroid.LONG);
 };
 

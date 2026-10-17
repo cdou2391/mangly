@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Alert, ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
+import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useQuery } from "@tanstack/react-query";
 import { useAlertSetting } from "@/alerts";
@@ -84,7 +85,16 @@ export default function Settings() {
             ) : (
               <LibraryStats counts={counts} />
             )}
+            {counts ? (
+              <View style={styles.link}>
+                <SettingsRow icon="stats-chart-outline" label="All your stats" onPress={() => router.push("/stats")} last navigates />
+              </View>
+            ) : null}
           </View>
+
+          <SettingsGroup title="ACCOUNT">
+            <SettingsRow icon="lock-closed-outline" label="Change password" onPress={() => router.push("/change-password")} last navigates />
+          </SettingsGroup>
 
           <SettingsGroup title="NOTIFICATIONS">
             <SettingsSwitchRow
@@ -140,6 +150,7 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
   body: { paddingHorizontal: 20, gap: 26 },
   section: { color: palette.primary, fontSize: 11.5, fontWeight: "800", letterSpacing: 2.4, marginBottom: 10 },
+  link: { marginTop: 10, borderRadius: 16, backgroundColor: palette.card, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", overflow: "hidden" },
   failed: { flexDirection: "row", alignItems: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: palette.card, borderWidth: 1, borderColor: "rgba(255,42,42,0.35)" },
   failedText: { flex: 1, color: "#D7D7DA", fontSize: 14, lineHeight: 19 },
   signOut: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,90,90,0.4)", backgroundColor: "rgba(255,90,90,0.07)" },

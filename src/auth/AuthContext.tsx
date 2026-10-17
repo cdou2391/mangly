@@ -29,6 +29,11 @@ interface AuthContextValue {
   state: AuthState;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /**
+   * Changes the password. The server then ends every session, this device's included, so this signs the device in again with
+   * the new password. Resolves true when it is still signed in; false when that last step failed and the device was signed out.
+   */
+  changePassword: (current: string, next: string) => Promise<boolean>;
   /** Ask the server again whether the stored session is good. Resolves when that attempt is over. */
   retry: () => Promise<void>;
 }
@@ -200,7 +205,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authApi.logout().catch(() => {});
   }, []);
 
-  const value = useMemo(() => ({ state, signIn, signOut, retry: attempt }), [state, signIn, signOut, attempt]);
+  const changePassword = useCallback(
+    async (current: string, next: string) => {
+      const email = userRef.current?.email;
+      await authApi.changePassword(current, next);
+      if (!email) {
+        await signOut(); // the session is gone and there is no way to renew it
+        return false;
+      }
+      try {
+        await authApi.login(email, next, "Android");
+        return true;
+      } catch {
+        await signOut(); // the old session is gone for good; better the login screen than requests that all fail
+        return false;
+      }
+    },
+    [signOut],
+  );
+
+  const value = useMemo(() => ({ state, signIn, signOut, changePassword, retry: attempt }), [state, signIn, signOut, changePassword, attempt]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

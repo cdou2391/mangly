@@ -18,6 +18,7 @@ src/
     (auth)/       login, register
     (tabs)/       library, updates (alerts + new chapters), search, settings
     manga/[id]    title detail
+    change-password, stats   pushed from Settings
   api/            fetch client, endpoint functions, response types
   auth/           token storage, AuthProvider
   alerts/         new-chapter notifications: background check, permission, Settings switch
@@ -181,3 +182,27 @@ Settings → **YOUR DATA** has **Export library as CSV** and **as JSON**.
 - **No backend.** The file is built on the phone from the library already loaded (`["tracked"]`, so it works offline) in `src/utils/exportLibrary.ts`: title, author, reading status, rating, last chapter read, latest chapter, status, genres, alerts on/off, source, source link, date added; A to Z. No server ids and no summaries. The JSON also holds the app name, when it was exported and the count.
 - **CSV:** UTF-8 with a byte-order mark (so Excel shows accents), CRLF line ends, quoted where needed. Titles come from scraped sites, so a text cell starting with `=`, `+`, `-` or `@` gets a leading apostrophe and cannot run as a spreadsheet formula.
 - **Hand-over:** the text is written to `mangapulse-library.csv|json` in the app's private cache and `expo-sharing` opens the system share sheet (save to Files or Drive, mail, a spreadsheet app). The next export replaces the file, and signing out deletes both. An empty library says "Nothing to export" instead of sharing a blank file.
+
+## Changing the password in the app
+
+Settings → ACCOUNT → **Change password** opens a screen with the current password, the new one and a confirmation (each with show/hide). The emailed reset link stays under Help & about for a forgotten password.
+
+- **Checked on the phone first** with the sign-up rules (`passwordProblem` in `auth/registration.ts`: 8 to 72 characters and 72 bytes, a letter and a number), that the new one differs from the current one, and that both new entries match. Every problem is shown at once.
+- **Request:** `POST /auth/change-password` `{ current_password, new_password }` (5 a minute). A 400 ("Current password is incorrect.") goes under the current-password field; 429 and server errors get plain wording (`describeError(..., "password")`); offline shows the usual "try again later". Nothing typed is lost on a failure.
+- **This device stays signed in.** The server revokes every session, this device's included (it bumps the token version and revokes all mobile refresh tokens). `AuthContext.changePassword` therefore signs in again with the new password straight after the change, which swaps in a fresh session without touching the cached library. If that second step fails (connection lost in between), the device is signed out to the login screen rather than left with a session that fails every request. The success screen says other devices were signed out.
+
+## Clearing read alerts
+
+On Updates, a trash button next to "Mark all read" appears when at least one alert has been read. It asks first ("N alerts you've already read will be removed from your history. Unread chapters and your reading progress are not touched"), then calls `DELETE /notifications/read`.
+
+- Only alerts the server holds as read are deleted (`readAlertCount` in `useUpdatesFeed`). Unread alerts, reading progress and the alerts' effect on the badge are untouched.
+- The newest chapter of each title keeps showing: the feed also builds a row from each title's latest chapter, so only older read history disappears.
+- Immediate, and put back with the usual toast if the call fails (`useClearReadAlerts`, like the other optimistic writes).
+
+## Reading stats
+
+Settings → YOUR LIBRARY → **All your stats** opens a screen computed entirely on the phone from the loaded library (`src/utils/stats.ts`), so it works offline and needs no backend (the server's `/tracked-manga/stats` only has the status counts, which Settings already derives).
+
+- **Figures:** titles (and how many were added in the last 30 days), chapters read, chapters to catch up (and across how many titles), average rating (one decimal, rated titles only).
+- **Charts:** status split (stacked bar and legend), rating counts 5 to 1, the eight most common genres (case and spacing ignored, a genre counted once per title), titles per site, and the three titles furthest behind (tap to open).
+- **Caveats:** "chapters read" is the whole part of the chapter number last saved in each title (a title with a label without a number counts 0), so it is a close figure for series numbered from 1, not a count of chapters actually opened. "Behind" ignores titles not started, as the Library does.

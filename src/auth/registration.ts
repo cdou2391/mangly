@@ -25,6 +25,12 @@ const schema = z.object({
     .regex(/\d/, "Include a number."),
 });
 
+/** What is wrong with a new password, in words, or null when it is acceptable. The same rules as sign-up and the server. */
+export function passwordProblem(password: string): string | null {
+  const parsed = schema.shape.password.safeParse(password);
+  return parsed.success ? null : parsed.error.issues[0].message;
+}
+
 export type RegistrationForm = z.infer<typeof schema>;
 
 export type RegistrationResult = { ok: true; data: RegistrationForm } | { ok: false; errors: Record<string, string> };

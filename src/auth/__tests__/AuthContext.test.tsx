@@ -1,6 +1,7 @@
 import { AppState, Text } from "react-native";
 import { act, render, screen } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { authApi } from "@/api/endpoints";
 import { ping, restoreSession } from "@/api/client";
 import type { RestoreOutcome } from "@/api/client";
 import { setOnline } from "@/api/reachability";
@@ -24,11 +25,14 @@ jest.mock("@/cache/store", () => ({
   clearSnapshot: jest.fn(async () => {}),
   startPersisting: jest.fn(() => ({ flush: jest.fn(), stop: jest.fn() })),
 }));
-jest.mock("@/api/endpoints", () => ({ authApi: { login: jest.fn(), logout: jest.fn(async () => {}) } }));
+jest.mock("@/api/endpoints", () => ({ authApi: { login: jest.fn(), logout: jest.fn(async () => {}), changePassword: jest.fn() } }));
 jest.mock("@/export/shareLibrary", () => ({ clearExports: jest.fn() }));
 jest.mock("@/alerts", () => ({ stopAlerts: jest.fn(async () => {}) }));
 
 const restore = restoreSession as jest.Mock;
+const apiChange = authApi.changePassword as jest.Mock;
+const apiLogin = authApi.login as jest.Mock;
+const apiLogout = authApi.logout as jest.Mock;
 const pingServer = ping as jest.Mock;
 const load = loadSnapshot as jest.Mock;
 let client: QueryClient;
@@ -406,5 +410,81 @@ describe("with an offline copy", () => {
       await wait(RETRY_DELAYS_MS[0] + 10);
       expect(pingServer).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("changing the password", () => {
+  let auth!: ReturnType<typeof useAuth>;
+  function Grab() {
+    auth = useAuth();
+    return null;
+  }
+  const signedIn = async () => {
+    restore.mockImplementation(async () => {
+      listener({ user: { ...ada, email: "ada@example.com" } as never });
+      return "ok" as const;
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <Grab />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await wait(0);
+  };
+  beforeEach(() => {
+    apiChange.mockReset().mockResolvedValue({});
+    apiLogin.mockReset().mockResolvedValue({});
+    apiLogout.mockClear();
+  });
+
+  it("changes it, then signs this device in again with the new password, because the server ends every session", async () => {
+    await signedIn();
+    let result: boolean | undefined;
+    await act(async () => void (result = await auth.changePassword("old-pass1", "new-pass2")));
+    expect(apiChange).toHaveBeenCalledWith("old-pass1", "new-pass2");
+    expect(apiLogin).toHaveBeenCalledWith("ada@example.com", "new-pass2", "Android");
+    expect(apiChange.mock.invocationCallOrder[0]).toBeLessThan(apiLogin.mock.invocationCallOrder[0]);
+    expect(result).toBe(true);
+    expect(apiLogout).not.toHaveBeenCalled();
+  });
+
+  it("does not sign in again, and passes the refusal on, when the server says no", async () => {
+    apiChange.mockRejectedValue(new Error("Current password is incorrect."));
+    await signedIn();
+    await expect(auth.changePassword("wrong", "new-pass2")).rejects.toThrow("Current password is incorrect.");
+    expect(apiLogin).not.toHaveBeenCalled();
+    expect(apiLogout).not.toHaveBeenCalled();
+  });
+
+  it("signs the device out too when it does not know the email to sign in again with", async () => {
+    restore.mockImplementation(async () => {
+      listener({ user: ada as never }); // a user without an email
+      return "ok" as const;
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <Grab />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await wait(0);
+    let result: boolean | undefined;
+    await act(async () => void (result = await auth.changePassword("old-pass1", "new-pass2")));
+    expect(apiChange).toHaveBeenCalled();
+    expect(apiLogin).not.toHaveBeenCalled();
+    expect(apiLogout).toHaveBeenCalled();
+    expect(result).toBe(false);
+  });
+
+  it("signs the device out, instead of leaving a dead session, when signing in again fails", async () => {
+    apiLogin.mockRejectedValue(new Error("Network error."));
+    await signedIn();
+    let result: boolean | undefined;
+    await act(async () => void (result = await auth.changePassword("old-pass1", "new-pass2")));
+    expect(result).toBe(false);
+    expect(apiLogout).toHaveBeenCalled();
   });
 });

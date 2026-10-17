@@ -15,6 +15,8 @@ export function useUpdatesFeed() {
 
   const items = useMemo(() => buildFeed(alerts.data, recent.data, tracked.data), [alerts.data, recent.data, tracked.data]);
   const unreadCount = useMemo(() => items.filter((i) => i.unread).length, [items]);
+  /** Alerts already read, which "Clear read" removes from the history. */
+  const readAlertCount = useMemo(() => alerts.data?.filter((n) => n.is_read).length ?? 0, [alerts.data]);
 
   const queries = [alerts, recent];
   const isLoading = items.length === 0 && queries.some((q) => q.isLoading);
@@ -24,6 +26,7 @@ export function useUpdatesFeed() {
   return {
     items,
     unreadCount,
+    readAlertCount,
     isLoading,
     error: items.length === 0 && error ? error : null,
     isRefetching: queries.some((q) => q.isRefetching),

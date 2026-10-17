@@ -41,3 +41,11 @@ describe("describeError when previewing", () => {
     expect(describeError(new ApiError(400, "Invalid manga URL for source 'x'"), "preview")).toBe("Invalid manga URL for source 'x'");
   });
 });
+
+describe("describeError when changing the password", () => {
+  it("words the rate limit and server errors for that task", () => {
+    expect(describeError(new ApiError(429, "Rate limit exceeded: 5 per 1 minute"), "password")).toBe("Too many attempts. Wait a minute and try again.");
+    expect(describeError(new ApiError(500, "Internal server error"), "password")).toMatch(/change your password/);
+    expect(describeError(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."), "password")).toMatch(/Can't reach/);
+  });
+});

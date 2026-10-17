@@ -1,4 +1,4 @@
-import { utf8Bytes, validateRegistration } from "../registration";
+import { passwordProblem, utf8Bytes, validateRegistration } from "../registration";
 
 const form = (over: Partial<{ full_name: string; email: string; password: string }> = {}) => ({
   full_name: "Ada Lovelace", email: "ada@example.com", password: "analytic1", ...over,
@@ -63,5 +63,20 @@ describe("validateRegistration", () => {
     const r = validateRegistration({ full_name: "", email: "x", password: "" });
     expect(r.ok).toBe(false);
     expect(Object.keys(r.ok ? {} : r.errors).sort()).toEqual(["email", "full_name", "password"]);
+  });
+});
+
+describe("passwordProblem", () => {
+  it("is null for an acceptable password", () => {
+    expect(passwordProblem("analytic1")).toBeNull();
+    expect(passwordProblem("a".repeat(71) + "1")).toBeNull();
+  });
+  it("says the first rule broken, in the words sign-up uses", () => {
+    expect(passwordProblem("short1")).toBe("At least 8 characters.");
+    expect(passwordProblem("12345678")).toBe("Include a letter.");
+    expect(passwordProblem("abcdefgh")).toBe("Include a number.");
+    expect(passwordProblem("a1".repeat(37))).toBe("At most 72 characters.");
+    expect(passwordProblem("é1".repeat(30))).toMatch(/72 bytes/);
+    expect(passwordProblem("")).toBe("At least 8 characters.");
   });
 });

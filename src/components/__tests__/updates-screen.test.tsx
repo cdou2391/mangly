@@ -10,7 +10,7 @@ import type { AppNotification, RecentChapter, TrackedManga } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({
   trackingApi: { list: jest.fn(), recentChapters: jest.fn(), update: jest.fn() },
-  notificationsApi: { list: jest.fn(), markRead: jest.fn(), markAllRead: jest.fn() },
+  notificationsApi: { list: jest.fn(), markRead: jest.fn(), markAllRead: jest.fn(), clearRead: jest.fn() },
 }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
@@ -21,6 +21,7 @@ const update = trackingApi.update as jest.Mock;
 const listAlerts = notificationsApi.list as jest.Mock;
 const markAlertRead = notificationsApi.markRead as jest.Mock;
 const markAllAlertsRead = notificationsApi.markAllRead as jest.Mock;
+const clearReadAlerts = notificationsApi.clearRead as jest.Mock;
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -299,6 +300,115 @@ describe("mark all read", () => {
     await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't mark everything as read. Check your connection and try again later.", ToastAndroid.LONG));
     expect(await row(/^Chainsaw Man\. Ch\. 191\..*\bnew\b/)).toBeTruthy();
     expect(screen.getByText("3 new")).toBeTruthy();
+    toast.mockRestore();
+  });
+});
+
+describe("clear read alerts", () => {
+  const answer = async (label: string) => {
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
+    await act(async () => buttons.find((b) => b.text === label)!.onPress?.());
+  };
+  let dialog: jest.SpyInstance;
+  beforeEach(() => {
+    dialog = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  });
+  afterEach(() => dialog.mockRestore());
+
+  /** Two read alerts: one for the newest One Piece chapter (the feed shows it anyway), one for an older chapter. */
+  const withHistory = () => {
+    let a = [
+      alert(11, 1, "Chainsaw Man", "191", NOW),
+      alert(13, 3, "One Piece", "1128", at(3 * DAY), true),
+      alert(14, 3, "One Piece", "1127", at(4 * DAY), true),
+    ];
+    server(a, [latest(1, "Chainsaw Man", "191", NOW, true), latest(3, "One Piece", "1128", at(3 * DAY), false)]);
+    listAlerts.mockImplementation(async () => a);
+    clearReadAlerts.mockImplementation(async () => {
+      a = a.filter((n) => !n.is_read);
+      return { deleted: 2 };
+    });
+  };
+
+  it("is offered next to Mark all read when there are read alerts", async () => {
+    await renderUpdates();
+    expect(await screen.findByRole("button", { name: "Clear read alerts" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mark all read" })).toBeTruthy();
+  });
+
+  it("is offered even when everything is read, and not at all when no alert has been read", async () => {
+    server([alert(11, 1, "Chainsaw Man", "191", NOW)], [latest(1, "Chainsaw Man", "191", NOW, true)]);
+    await renderUpdates();
+    await row(/^Chainsaw Man/);
+    expect(screen.queryByRole("button", { name: "Clear read alerts" })).toBeNull();
+  });
+
+  it("asks first, saying how many will go and that nothing unread or any progress is touched", async () => {
+    withHistory();
+    await renderUpdates();
+    await fireEvent.press(await screen.findByRole("button", { name: "Clear read alerts" }));
+    expect(Alert.alert).toHaveBeenCalledWith("Clear read alerts?", expect.stringContaining("2 alerts you've already read"), expect.any(Array));
+    expect((Alert.alert as jest.Mock).mock.calls.at(-1)![1]).toMatch(/Unread chapters and your reading progress are not touched/);
+    await answer("Cancel");
+    expect(clearReadAlerts).not.toHaveBeenCalled();
+  });
+
+  it("says 'alert' for one", async () => {
+    server([alert(13, 3, "One Piece", "1128", at(3 * DAY), true)], [latest(3, "One Piece", "1128", at(3 * DAY), false)]);
+    await renderUpdates();
+    await fireEvent.press(await screen.findByRole("button", { name: "Clear read alerts" }));
+    expect((Alert.alert as jest.Mock).mock.calls.at(-1)![1]).toMatch(/^1 alert you've already read/);
+  });
+
+  it("removes the read alerts from the history once confirmed, and the button goes away", async () => {
+    withHistory();
+    await renderUpdates();
+    expect(await row(/^One Piece\. Ch\. 1127/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Clear read alerts" }));
+    await answer("Clear");
+    await waitFor(() => expect(clearReadAlerts).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^One Piece\. Ch\. 1127/ })).toBeNull());
+    expect(screen.getByRole("button", { name: /^One Piece\. Ch\. 1128/ })).toBeTruthy(); // the newest chapter still shows: it comes from the title
+    expect(screen.queryByRole("button", { name: "Clear read alerts" })).toBeNull();
+  });
+
+  it("takes the read alerts off the screen at once, before the server has answered", async () => {
+    withHistory();
+    let finish!: () => void;
+    clearReadAlerts.mockReturnValue(new Promise((resolve) => (finish = () => resolve({ deleted: 2 }))));
+    await renderUpdates();
+    expect(await row(/^One Piece\. Ch\. 1127/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Clear read alerts" }));
+    await answer("Clear");
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^One Piece\. Ch\. 1127/ })).toBeNull());
+    expect(clearReadAlerts).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+  });
+
+  it("leaves unread chapters and reading progress alone", async () => {
+    withHistory();
+    await renderUpdates();
+    await fireEvent.press(await screen.findByRole("button", { name: "Clear read alerts" }));
+    await answer("Clear");
+    await waitFor(() => expect(clearReadAlerts).toHaveBeenCalled());
+    expect(await row(/^Chainsaw Man\. Ch\. 191\..*\bnew\b/)).toBeTruthy();
+    expect(update).not.toHaveBeenCalled();
+    expect(markAlertRead).not.toHaveBeenCalled();
+    expect(markAllAlertsRead).not.toHaveBeenCalled();
+  });
+
+  it("puts the alerts back and tells the user when it cannot be done", async () => {
+    jest.replaceProperty(Platform, "OS", "android");
+    const toast = jest.spyOn(ToastAndroid, "show").mockImplementation(() => {});
+    withHistory();
+    await renderUpdates();
+    await fireEvent.press(await screen.findByRole("button", { name: "Clear read alerts" }));
+    clearReadAlerts.mockRejectedValue(new Error("Network error."));
+    listAlerts.mockRejectedValue(new Error("Network error.")); // the refresh cannot repair the screen either (offline)
+    await answer("Clear");
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't clear your read alerts. Check your connection and try again later.", ToastAndroid.LONG));
+    expect(await row(/^One Piece\. Ch\. 1127/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Clear read alerts" })).toBeTruthy();
     toast.mockRestore();
   });
 });

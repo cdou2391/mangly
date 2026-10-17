@@ -14,6 +14,7 @@ export function SettingsRow({
   warn,
   action,
   busy,
+  navigates,
 }: {
   icon: IconName;
   label: string;
@@ -24,6 +25,8 @@ export function SettingsRow({
   action?: boolean;
   /** The action is running: shows a spinner and ignores taps. */
   busy?: boolean;
+  /** The row opens another screen of the app: drawn with a forward arrow instead of the "opens a web page" icon. */
+  navigates?: boolean;
   /** Draw the value (and icon) in the alert colour, for a state that needs attention. */
   warn?: boolean;
 }) {
@@ -34,7 +37,7 @@ export function SettingsRow({
       </View>
       <Text style={styles.label}>{label}</Text>
       {value ? <Text style={[styles.value, warn && { color: palette.danger, fontWeight: "700" }]}>{value}</Text> : null}
-      {busy ? <ActivityIndicator size="small" color={palette.muted} /> : onPress ? <Ionicons name={action ? "share-outline" : "open-outline"} size={17} color={palette.faint} /> : null}
+      {busy ? <ActivityIndicator size="small" color={palette.muted} /> : onPress ? <Ionicons name={action ? "share-outline" : navigates ? "chevron-forward" : "open-outline"} size={17} color={palette.faint} /> : null}
     </>
   );
   const style = [styles.row, !last && styles.divider];
@@ -47,7 +50,7 @@ export function SettingsRow({
   }
   return (
     <Pressable
-      accessibilityRole={action ? "button" : "link"}
+      accessibilityRole={action || navigates ? "button" : "link"}
       accessibilityLabel={label}
       accessibilityState={action ? { busy: !!busy, disabled: !!busy } : undefined}
       disabled={busy}

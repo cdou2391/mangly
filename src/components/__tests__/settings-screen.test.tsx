@@ -2,6 +2,7 @@ import { Alert } from "react-native";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import Settings from "@/app/(tabs)/settings";
 import { useAlertSetting } from "@/alerts";
@@ -15,6 +16,7 @@ jest.mock("@/api/endpoints", () => ({ trackingApi: { list: jest.fn() } }));
 jest.mock("@/alerts", () => ({ useAlertSetting: jest.fn() }));
 jest.mock("@/auth/AuthContext", () => ({ useAuth: jest.fn() }));
 jest.mock("@/config", () => ({ WEB_URL: "https://web.test" }));
+jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 jest.mock("@/export/shareLibrary", () => ({ shareLibrary: jest.fn(async () => {}) }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { version: "1.2.3" } } }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
@@ -152,6 +154,35 @@ describe("notifications", () => {
   it("says they are checked in the background, so late arrival is expected", async () => {
     await renderSettings();
     expect(await screen.findByText(/Checked in the background/)).toBeTruthy();
+  });
+});
+
+describe("the account", () => {
+  it("opens the change password screen inside the app", async () => {
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Change password" }));
+    expect(router.push).toHaveBeenCalledWith("/change-password");
+    expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
+  });
+
+  it("still has the emailed reset link for a forgotten password", async () => {
+    await renderSettings();
+    expect(await screen.findByRole("link", { name: "Reset password" })).toBeTruthy();
+  });
+});
+
+describe("the stats link", () => {
+  it("opens all the stats once the numbers are loaded", async () => {
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "All your stats" }));
+    expect(router.push).toHaveBeenCalledWith("/stats");
+  });
+
+  it("is not offered while the numbers are not there", async () => {
+    list.mockReturnValue(new Promise(() => {}));
+    await renderSettings();
+    await screen.findByText("YOUR LIBRARY");
+    expect(screen.queryByRole("button", { name: "All your stats" })).toBeNull();
   });
 });
 
