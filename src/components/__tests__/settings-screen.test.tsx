@@ -6,7 +6,9 @@ import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { BROWSER_OPTIONS } from "@/utils/browser";
 import Settings from "@/app/(tabs)/settings";
-import { useAlertSetting } from "@/alerts";
+import { Linking } from "react-native";
+import { sendTestNotification, useAlertSetting, useAlertStatus } from "@/alerts";
+import { EMPTY, type AlertsState } from "@/alerts/state";
 import { useAuth } from "@/auth/AuthContext";
 import { trackingApi } from "@/api/endpoints";
 import { setOnline } from "@/api/reachability";
@@ -14,10 +16,15 @@ import { shareLibrary } from "@/export/shareLibrary";
 import type { ReadingStatus, TrackedManga, User } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({ trackingApi: { list: jest.fn() } }));
-jest.mock("@/alerts", () => ({ useAlertSetting: jest.fn() }));
+jest.mock("@/alerts", () => ({ useAlertSetting: jest.fn(), useAlertStatus: jest.fn(), sendTestNotification: jest.fn() }));
 jest.mock("@/auth/AuthContext", () => ({ useAuth: jest.fn() }));
 jest.mock("@/config", () => ({ WEB_URL: "https://web.test" }));
-jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
+jest.mock("expo-router", () => ({
+  router: { push: jest.fn() },
+  useFocusEffect: (callback: () => void) => {
+    require("react").useEffect(callback, [callback]);
+  },
+}));
 jest.mock("@/export/shareLibrary", () => ({ shareLibrary: jest.fn(async () => {}) }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { version: "1.2.3" } } }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
@@ -26,7 +33,11 @@ const list = trackingApi.list as jest.Mock;
 const share = shareLibrary as jest.Mock;
 const mockedUseAuth = useAuth as jest.Mock;
 const mockedAlerts = useAlertSetting as jest.Mock;
+const mockedStatus = useAlertStatus as jest.Mock;
+const sendTest = sendTestNotification as jest.Mock;
 let setAlerts: jest.Mock;
+let refreshStatus: jest.Mock;
+const withStatus = (over: Partial<AlertsState> = {}) => mockedStatus.mockReturnValue({ state: { ...EMPTY, enabled: true, ...over }, refresh: refreshStatus });
 
 const user = (over: Partial<User> = {}): User => ({
   id: 1, full_name: "Ada Lovelace", email: "ada@example.com", role: "user", is_active: true,
@@ -55,6 +66,9 @@ beforeEach(() => {
   setOnline(true);
   setAlerts = jest.fn();
   mockedAlerts.mockReturnValue({ on: true, busy: false, set: setAlerts });
+  refreshStatus = jest.fn(async () => {});
+  withStatus();
+  sendTest.mockResolvedValue("sent");
   signedIn();
   list.mockResolvedValue([tracked(1, "reading"), tracked(2, "reading"), tracked(3, "completed"), tracked(4, "plan_to_read")]);
 });
@@ -251,6 +265,128 @@ describe("exporting the library", () => {
     await screen.findByText("YOUR DATA");
     expect(screen.queryByRole("button", { name: "Export library as CSV" })).toBeNull();
     expect(screen.getByLabelText("Export library as CSV")).toBeTruthy();
+  });
+});
+
+describe("the notification status", () => {
+  const MIN = 60_000;
+  beforeEach(() => jest.spyOn(Alert, "alert").mockImplementation(() => {}));
+  afterEach(() => (Alert.alert as jest.Mock).mockRestore());
+
+  it("is not shown while notifications are off, or before the saved state has been read", async () => {
+    mockedAlerts.mockReturnValue({ on: false, busy: false, set: setAlerts });
+    await renderSettings();
+    await screen.findByLabelText("New chapter notifications");
+    expect(screen.queryByText("Last check")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send a test notification" })).toBeNull();
+  });
+
+  it("is not shown until the saved state has been read", async () => {
+    mockedStatus.mockReturnValue({ state: null, refresh: refreshStatus });
+    await renderSettings();
+    await screen.findByLabelText("New chapter notifications");
+    expect(screen.queryByText("Last check")).toBeNull();
+  });
+
+  it("says it is waiting for the first check when none has run", async () => {
+    await renderSettings();
+    expect(await screen.findByLabelText("Last check, Waiting for the first check")).toBeTruthy();
+  });
+
+  it("shows when the last check ran and how it went", async () => {
+    withStatus({ lastCheck: { at: Date.now() - 12 * MIN, result: "nothing", shown: 0 } });
+    await renderSettings();
+    expect(await screen.findByLabelText("Last check, 12 min ago · nothing new")).toBeTruthy();
+  });
+
+  it("says how many notifications the last check showed", async () => {
+    withStatus({ lastCheck: { at: Date.now() - 3 * MIN, result: "notified", shown: 2 } });
+    await renderSettings();
+    expect(await screen.findByLabelText("Last check, 3 min ago · 2 notifications shown")).toBeTruthy();
+  });
+
+  it("warns when the last check is much older than Android normally allows", async () => {
+    withStatus({ lastCheck: { at: Date.now() - 9 * 60 * MIN, result: "nothing", shown: 0 } });
+    await renderSettings();
+    expect(await screen.findByLabelText("Last check, 9 h ago · later than expected")).toBeTruthy();
+    expect(screen.getByText("9 h ago · later than expected").props.style).toEqual(expect.arrayContaining([expect.objectContaining({ color: "#FF5A5A" })]));
+  });
+
+  it("reads the status again each time the screen is shown", async () => {
+    await renderSettings();
+    await screen.findByText("Last check");
+    expect(refreshStatus).toHaveBeenCalled();
+  });
+
+  it("shows how late alerts typically are, once there are enough to say", async () => {
+    withStatus({ delays: [10, 50, 20, 40, 30] });
+    await renderSettings();
+    expect(await screen.findByLabelText("Alert delay, About 30 min")).toBeTruthy();
+  });
+
+  it("says there are not enough alerts yet to tell", async () => {
+    withStatus({ delays: [10, 20] });
+    await renderSettings();
+    expect(await screen.findByLabelText("Alert delay, Not enough alerts yet")).toBeTruthy();
+  });
+
+  it("sends a test notification, and says nothing more when it works (the notification is the answer)", async () => {
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Send a test notification" }));
+    await waitFor(() => expect(sendTest).toHaveBeenCalledTimes(1));
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it("ignores a second tap while the test is being sent", async () => {
+    let finish!: (v: string) => void;
+    sendTest.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Send a test notification" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send a test notification" }).props.accessibilityState.busy).toBe(true));
+    await fireEvent.press(screen.getByRole("button", { name: "Send a test notification" }));
+    expect(sendTest).toHaveBeenCalledTimes(1);
+    await act(async () => finish("sent"));
+  });
+
+  it("explains, and offers the system settings, when notifications are blocked", async () => {
+    sendTest.mockResolvedValue("no-permission");
+    const open = jest.spyOn(Linking, "openSettings").mockResolvedValue(undefined);
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Send a test notification" }));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith("Notifications are blocked", expect.stringContaining("Allow notifications"), expect.any(Array)));
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
+    await act(async () => buttons.find((b) => b.text === "Open settings")!.onPress?.());
+    expect(open).toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it("says so when the test could not be sent", async () => {
+    sendTest.mockRejectedValue(new Error("no channel"));
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Send a test notification" }));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith("Couldn't send the test", expect.any(String)));
+    expect(screen.getByRole("button", { name: "Send a test notification" }).props.accessibilityState.busy).toBe(false);
+  });
+
+  it("explains why alerts can be late, with a way to the app's battery settings", async () => {
+    const open = jest.spyOn(Linking, "openSettings").mockResolvedValue(undefined);
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Alerts arriving late?" }));
+    const [title, message, buttons] = (Alert.alert as jest.Mock).mock.calls.at(-1)!;
+    expect(title).toBe("Alerts arriving late?");
+    expect(message).toMatch(/about once an hour/);
+    expect(message).toMatch(/Unrestricted/);
+    expect(message).toMatch(/It appears once a few alerts have arrived/);
+    await act(async () => (buttons as { text: string; onPress?: () => void }[]).find((b) => b.text === "Open app settings")!.onPress?.());
+    expect(open).toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it("says how many alerts the delay is based on", async () => {
+    withStatus({ delays: [10, 20, 30, 40, 50] });
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Alerts arriving late?" }));
+    expect((Alert.alert as jest.Mock).mock.calls.at(-1)![1]).toMatch(/the middle of your last 5/);
   });
 });
 

@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
-import { Alert, ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { useAlertSetting } from "@/alerts";
+import { sendTestNotification, useAlertSetting, useAlertStatus } from "@/alerts";
+import { formatDelay, lastCheckLine, typicalDelay } from "@/alerts/status";
 import { trackingApi } from "@/api/endpoints";
 import { useOnline } from "@/api/reachability";
 import { useAuth } from "@/auth/AuthContext";
@@ -28,11 +29,22 @@ export default function Settings() {
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const online = useOnline();
   const alerts = useAlertSetting();
+  const alertStatus = useAlertStatus();
+  const [testing, setTesting] = useState(false);
+  const { refresh: refreshAlertStatus } = alertStatus;
+  // The background check writes its status while the app is closed, and this tab stays mounted: read it when it is shown.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshAlertStatus();
+    }, [refreshAlertStatus]),
+  );
   // The library list is already kept fresh by every screen that changes it, so the numbers are counted from it
   // rather than from a separate stats request that would go stale.
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
   const counts = useMemo(() => (tracked.data ? countByFilter(tracked.data) : null), [tracked.data]);
   if (state.status !== "signedIn") return null;
+  const checkLine = alertStatus.state ? lastCheckLine(alertStatus.state, Date.now()) : { value: "", warn: false };
+  const delay = alertStatus.state ? typicalDelay(alertStatus.state.delays) : null;
   const { user } = state;
 
   const exportLibrary = async (format: ExportFormat) => {
@@ -50,6 +62,36 @@ export default function Settings() {
       setExporting(null);
     }
   };
+
+  const sendTest = async () => {
+    setTesting(true);
+    try {
+      if ((await sendTestNotification()) === "no-permission") {
+        Alert.alert("Notifications are blocked", "Allow notifications for MangaPulse in your phone's settings, then try again.", [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open settings", onPress: () => void Linking.openSettings().catch(() => {}) },
+        ]);
+      }
+    } catch {
+      Alert.alert("Couldn't send the test", "Something went wrong. Try again.");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const explainDelays = (samples: number | null) =>
+    Alert.alert(
+      "Alerts arriving late?",
+      "MangaPulse looks for new chapters about once an hour, and your phone asks for them at best every 15 minutes. Android runs those checks later when the phone is idle, in battery saver, or when it limits background apps.\n\n" +
+        "To help: open the app's settings, then Battery, and choose Unrestricted (or Not optimized). Avoid force-stopping the app.\n\n" +
+        (samples === null
+          ? "Alert delay is how long after MangaPulse finds a chapter your phone shows it. It appears once a few alerts have arrived."
+          : `Alert delay is how long after MangaPulse finds a chapter your phone shows it (the middle of your last ${samples}).`),
+      [
+        { text: "Close", style: "cancel" },
+        { text: "Open app settings", onPress: () => void Linking.openSettings().catch(() => {}) },
+      ],
+    );
 
   const confirmSignOut = () =>
     Alert.alert("Sign out?", "You will stop receiving push notifications on this device.", [
@@ -104,8 +146,16 @@ export default function Settings() {
               value={alerts.on}
               busy={alerts.busy}
               onChange={(v) => void alerts.set(v)}
-              last
+              last={!alerts.on}
             />
+            {alerts.on && alertStatus.state ? (
+              <>
+                <SettingsRow icon="time-outline" label="Last check" value={checkLine.value} warn={checkLine.warn} />
+                <SettingsRow icon="speedometer-outline" label="Alert delay" value={delay ? formatDelay(delay.minutes) : "Not enough alerts yet"} />
+                <SettingsRow icon="paper-plane-outline" label="Send a test notification" action trailing="notifications-outline" busy={testing} onPress={() => void sendTest()} />
+                <SettingsRow icon="help-circle-outline" label="Alerts arriving late?" navigates onPress={() => explainDelays(delay?.samples ?? null)} last />
+              </>
+            ) : null}
           </SettingsGroup>
 
           <SettingsGroup title="YOUR DATA">

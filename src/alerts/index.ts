@@ -1,3 +1,4 @@
 export { AlertsEffects } from "./AlertsEffects";
-export { stopAlerts } from "./control";
+export { sendTestNotification, stopAlerts } from "./control";
+export { useAlertStatus } from "./useAlertStatus";
 export { useAlertSetting } from "./useAlertSetting";

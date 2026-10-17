@@ -5,8 +5,9 @@ import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { trackingApi } from "@/api/endpoints";
 import { useAuth } from "@/auth/AuthContext";
+import { useOpenChapter } from "@/hooks/useOpenChapter";
 import { attachUser, markSeen, resume, turnOn } from "./control";
-import { newestId } from "./plan";
+import { newestId, tapTarget } from "./plan";
 import type { AppNotification } from "@/api/types";
 
 // The app is Android-only; the web preview has no notification responses to read. A platform is fixed for the life of the app, so this is not a conditional hook.
@@ -17,7 +18,8 @@ const useResponse = Platform.OS === "web" ? () => null : Notifications.useLastNo
  *  1. the saved state is made to belong to this user, and the background check is kept scheduled;
  *  2. the first time (once there is something in the library to be notified about) the user is asked for permission;
  *  3. alerts the app has itself loaded count as seen, so the background check does not announce them again;
- *  4. tapping a notification opens Updates.
+ *  4. tapping a notification opens Updates, and, for a single chapter, the chapter itself (marked read, like a row of the
+ *     feed). Without a link the chapter's title opens, and a summary only opens Updates.
  */
 export function AlertsEffects() {
   const { state } = useAuth();
@@ -25,6 +27,7 @@ export function AlertsEffects() {
   const qc = useQueryClient();
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
   const hasTitles = (tracked.data?.length ?? 0) > 0;
+  const openChapter = useOpenChapter();
 
   // 1 and 2
   useEffect(() => {
@@ -65,8 +68,12 @@ export function AlertsEffects() {
     const id = `${response.notification.request.identifier}@${response.notification.date}`;
     if (handled.current === id) return;
     handled.current = id;
-    if (response.notification.request.content.data?.screen === "updates") router.navigate("/updates");
-  }, [response, userId]);
+    const data = response.notification.request.content.data;
+    if (data?.screen !== "updates") return;
+    router.navigate("/updates"); // what is under the chapter when the reader comes back from it
+    const target = tapTarget(data);
+    if (target) openChapter({ ...target, tracking_id: tracked.data?.find((t) => t.manga_id === target.manga_id)?.id ?? null, unread: true });
+  }, [response, userId, openChapter, tracked.data]);
 
   return null;
 }

@@ -52,7 +52,7 @@ Logout    POST /auth/mobile/logout {refresh_token}   -> revoke
 Backend (Celery)   -> new chapter found -> one alert row per user and chapter (already de-duplicated; only for titles with alerts on)
 Phone (WorkManager)-> every ~15+ min, with network: renew session -> GET /notifications?unread_only=true
                    -> unread alerts newer than the last one seen -> local notification (one each, or a summary past 3)
-Tap                -> app opens on Updates
+Tap                -> one chapter: Updates, then the chapter itself (marked read); a summary: Updates
 ```
 
 - **No server push.** `expo-background-task` (Android WorkManager) wakes the app; `src/alerts/check.ts` does one check; `expo-notifications` shows a local notification. No Expo or Firebase account, no device registry, no backend change.
@@ -61,6 +61,14 @@ Tap                -> app opens on Updates
 - **Switch.** Settings → Notifications. On first launch with something in the library the app asks for the Android 13+ permission once; the answer is remembered. If the system will not ask again, switching on opens the system settings. Sign-out cancels the check, forgets everything and clears shown notifications; a different user on the device starts fresh.
 - **The check never runs while the app is open** (the app shows the alerts itself).
 - **Session.** Each check renews the session like a launch does, which rotates the refresh token. A check killed between the server rotating the token and the app saving it could leave a token the server no longer accepts after its 10 s leeway; WorkManager gives a run minutes, so this is rare, and the result would be a sign-in prompt, not data loss.
+
+**Tapping a notification.** A notification for one chapter carries which alert, title, chapter and link it is about (`data` in `plan.ts`). `AlertsEffects` opens Updates (so that is what is under the browser when the reader comes back) and then the chapter through the same `useOpenChapter` as a row of the feed: the page opens at once and the alert is marked read, which moves reading progress forward. With no usable link (only `http(s)` links are accepted, everything else is dropped) the title's page opens instead, found through the library list; a summary ("5 new chapters"), a test notification and a notification from an older version of the app only open Updates.
+
+**Seeing that it works (Settings → Notifications, when on).** The background check writes its own status, because it runs while the app is closed (`lastCheck` and `delays` next to `seenId` in the saved state; an older saved state without them still reads fine).
+- **Last check:** "12 min ago · nothing new" / "2 notifications shown" / "no connection" / "couldn't show it" / "blocked in system settings". A check that was skipped (alerts off, app open) is never recorded, so the line never claims a look that did not happen. Older than 6 hours, it reads "later than expected" in the alert colour. The screen re-reads it whenever it is shown or the app returns to the front.
+- **Alert delay:** the middle value of how many minutes passed between MangaPulse creating each of the last 20 alerts shown and the phone showing it (from the alert's `created_at`). It appears from the third alert. It does not include the time between a chapter being published and MangaPulse finding it (the server scans hourly), so it measures only the phone's part; use it to judge whether server push would be worth building.
+- **Send a test notification** shows one like a real one (tapping it opens Updates), or says that notifications are blocked and opens the system settings.
+- **Alerts arriving late?** explains the two delays (the server's hourly scan; Android's own scheduling, longer in Doze or battery saver) and opens the app's settings page so battery use can be set to Unrestricted.
 
 **Limits to expect.** Android treats the interval as a minimum and batches work: Doze and battery saver can delay checks for hours, some manufacturers stop background work for apps that are not used, and "Force stop" cancels it until the app is opened again. Notifications therefore arrive minutes to hours after a chapter is detected, never instantly.
 

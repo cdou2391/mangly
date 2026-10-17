@@ -21,4 +21,6 @@ export const alertsMock = () => ({
   AlertsEffects: () => null,
   stopAlerts: jest.fn(async () => {}),
   useAlertSetting: () => ({ on: false, busy: false, set: jest.fn() }),
+  useAlertStatus: () => ({ state: null, refresh: jest.fn() }),
+  sendTestNotification: jest.fn(async () => "sent"),
 });

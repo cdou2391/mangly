@@ -5,7 +5,7 @@ import type { AppNotification } from "@/api/types";
 import { runAlertsCheck } from "../check";
 import { hasPermission, show } from "../notify";
 import { unregisterAlertsTask } from "../registration";
-import { readState, writeState } from "../state";
+import { EMPTY, readState, writeState, type AlertsState } from "../state";
 
 jest.mock("expo-secure-store", () => require("@/test-utils/mocks").secureStoreMock());
 jest.mock("@/api/client", () => ({ restoreSession: jest.fn() }));
@@ -19,11 +19,11 @@ const permitted = hasPermission as jest.Mock;
 const present = show as jest.Mock;
 const unregister = unregisterAlertsTask as jest.Mock;
 
-const alert = (id: number, title = "Chainsaw Man", chapter = "191", read = false) =>
-  ({ id, is_read: read, chapter_released: chapter, manga: { canonical_name: title } }) as AppNotification;
+const alert = (id: number, title = "Chainsaw Man", chapter = "191", read = false, createdAt = "2026-10-17T11:30:00Z") =>
+  ({ id, is_read: read, chapter_released: chapter, created_at: createdAt, manga: { canonical_name: title } }) as AppNotification;
 
-const setState = (s: Partial<{ enabled: boolean | null; userId: number | null; seenId: number | null }> = {}) =>
-  writeState({ enabled: true, userId: 1, seenId: 10, ...s });
+const setState = (s: Partial<AlertsState> = {}) =>
+  writeState({ ...EMPTY, enabled: true, userId: 1, seenId: 10, ...s });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -154,5 +154,128 @@ describe("the first run", () => {
     expect((await readState()).seenId).toBe(0);
     list.mockResolvedValue([alert(1)]);
     expect(await runAlertsCheck()).toBe("notified");
+  });
+});
+
+describe("remembering how it went, for the status line in Settings", () => {
+  const NOW = Date.parse("2026-10-17T12:00:00Z");
+  beforeEach(() => {
+    jest.useFakeTimers({ now: NOW, doNotFake: ["nextTick", "setImmediate", "setTimeout", "clearTimeout", "queueMicrotask"] });
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it("notes a check with nothing new", async () => {
+    await setState();
+    list.mockResolvedValue([alert(10)]);
+    await runAlertsCheck();
+    expect((await readState()).lastCheck).toEqual({ at: NOW, result: "nothing", shown: 0 });
+  });
+
+  it("notes the baseline, and keeps no delay for an alert it did not announce", async () => {
+    await setState({ seenId: null });
+    list.mockResolvedValue([alert(5)]);
+    await runAlertsCheck();
+    const state = await readState();
+    expect(state.lastCheck).toEqual({ at: NOW, result: "baseline", shown: 0 });
+    expect(state.delays).toEqual([]);
+  });
+
+  it("notes the notifications shown (a summary counts as one), and how late each alert was", async () => {
+    await setState();
+    list.mockResolvedValue([alert(11, "A", "1", false, "2026-10-17T11:30:00Z"), alert(12, "B", "2", false, "2026-10-17T10:00:00Z")]);
+    await runAlertsCheck();
+    const state = await readState();
+    expect(state.lastCheck).toEqual({ at: NOW, result: "notified", shown: 2 });
+    expect(state.delays).toEqual([30, 120]);
+
+    await setState({ seenId: 12 });
+    list.mockResolvedValue([13, 14, 15, 16].map((i) => alert(i, `T${i}`, `${i}`)));
+    await runAlertsCheck();
+    expect((await readState()).lastCheck).toEqual({ at: NOW, result: "notified", shown: 1 });
+  });
+
+  it("adds to the delays already kept, and keeps only the latest twenty", async () => {
+    await setState({ delays: Array.from({ length: 19 }, (_, i) => i + 100) });
+    list.mockResolvedValue([alert(11), alert(12)]);
+    await runAlertsCheck();
+    const { delays } = await readState();
+    expect(delays).toHaveLength(20);
+    expect(delays.slice(-2)).toEqual([30, 30]);
+    expect(delays[0]).toBe(101);
+  });
+
+  it("never saves more than twenty delays, so the saved state does not grow", async () => {
+    await setState({ delays: Array.from({ length: 19 }, (_, i) => i) });
+    list.mockResolvedValue([alert(11), alert(12), alert(13)]);
+    await runAlertsCheck();
+    const { store } = require("@/test-utils/mocks");
+    expect(JSON.parse(store["mangly.alerts"]).delays).toHaveLength(20);
+  });
+
+  it("does not count an alert whose time cannot be read", async () => {
+    await setState();
+    list.mockResolvedValue([alert(11, "A", "1", false, "later")]);
+    await runAlertsCheck();
+    const state = await readState();
+    expect(state.lastCheck?.result).toBe("notified");
+    expect(state.delays).toEqual([]);
+  });
+
+  it("notes blocked notifications, and keeps no delay: nothing was shown", async () => {
+    await setState();
+    permitted.mockResolvedValue(false);
+    list.mockResolvedValue([alert(11)]);
+    await runAlertsCheck();
+    const state = await readState();
+    expect(state.lastCheck).toEqual({ at: NOW, result: "no-permission", shown: 0 });
+    expect(state.delays).toEqual([]);
+    expect(state.seenId).toBe(11);
+  });
+
+  it("notes a failure to show, and does not move the baseline", async () => {
+    await setState();
+    list.mockResolvedValue([alert(11)]);
+    present.mockRejectedValueOnce(new Error("no channel"));
+    await runAlertsCheck();
+    const state = await readState();
+    expect(state.lastCheck).toEqual({ at: NOW, result: "failed", shown: 0 });
+    expect(state.seenId).toBe(10);
+    expect(state.delays).toEqual([]);
+  });
+
+  it("notes that the server could not be reached, whether the session or the alerts failed", async () => {
+    await setState();
+    restore.mockResolvedValue("unreachable");
+    await runAlertsCheck();
+    expect((await readState()).lastCheck?.result).toBe("unreachable");
+    restore.mockResolvedValue("ok");
+    list.mockRejectedValue(new Error("offline"));
+    await runAlertsCheck();
+    expect((await readState()).lastCheck).toEqual({ at: NOW, result: "unreachable", shown: 0 });
+  });
+
+  it("notes nothing when the check was skipped, so Settings never claims a check that did not look", async () => {
+    await setState({ enabled: false });
+    await runAlertsCheck();
+    expect((await readState()).lastCheck).toBeNull();
+    await setState();
+    (AppState as { currentState: string }).currentState = "active";
+    await runAlertsCheck();
+    expect((await readState()).lastCheck).toBeNull();
+  });
+
+  it("notes nothing when signed out: there is no one to tell", async () => {
+    await setState();
+    restore.mockResolvedValue("none");
+    await runAlertsCheck();
+    expect((await readState()).lastCheck).toBeNull();
+  });
+
+  it("still finishes the check when the status cannot be saved", async () => {
+    await setState();
+    list.mockResolvedValue([alert(10)]);
+    const store = require("expo-secure-store");
+    store.setItemAsync.mockRejectedValueOnce(new Error("disk full"));
+    expect(await runAlertsCheck()).toBe("nothing");
   });
 });

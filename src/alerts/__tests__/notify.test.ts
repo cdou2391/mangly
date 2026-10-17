@@ -61,6 +61,12 @@ describe("showing", () => {
     });
   });
 
+  it("carries what a notification says about itself, so a tap knows what to open", async () => {
+    const data = { screen: "updates", alertId: 5, mangaId: 50, chapter: "191", chapterUrl: "https://x.test/191" };
+    await show([{ identifier: "alert-5", title: "Chainsaw Man", body: "Ch. 191 is out", data }]);
+    expect(N.scheduleNotificationAsync).toHaveBeenCalledWith(expect.objectContaining({ content: expect.objectContaining({ data }) }));
+  });
+
   it("creates the channel", async () => {
     await ensureChannel();
     expect(N.setNotificationChannelAsync).toHaveBeenCalledTimes(1);

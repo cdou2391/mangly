@@ -25,7 +25,7 @@ The app is shown to users as **MangaPulse** (the code lives in the `mangly` repo
 | Export the library as CSV or JSON, reading stats, clear read alerts | Implemented (built on the phone; clearing uses `DELETE /notifications/read`) |
 | Change password in the app | Implemented (existing `POST /auth/change-password`; this device is signed in again, other devices are signed out) |
 | Home hero: Similar / Popular recommendations | Implemented. Needs MangaPulse `GET /manga/home-picks` (to be deployed) |
-| New-chapter notifications | Implemented (background check, no backend change). Delivery is delayed by Android, see ARCHITECTURE.md |
+| New-chapter notifications | Implemented (background check, no backend change). Tapping one opens the chapter; Settings shows the last check, the typical delay and a test button. Delivery is delayed by Android, see ARCHITECTURE.md |
 | AI recommendations, admin | Not started |
 
 The backend changes are specified in [`docs/BACKEND_WORK.md`](docs/BACKEND_WORK.md). Until the MangaPulse release containing PR #20 is deployed, sign-in returns 404 from `/auth/mobile/login`.

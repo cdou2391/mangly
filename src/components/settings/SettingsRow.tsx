@@ -15,6 +15,7 @@ export function SettingsRow({
   action,
   busy,
   navigates,
+  trailing,
 }: {
   icon: IconName;
   label: string;
@@ -27,6 +28,8 @@ export function SettingsRow({
   busy?: boolean;
   /** The row opens another screen of the app: drawn with a forward arrow instead of the "opens a web page" icon. */
   navigates?: boolean;
+  /** Replaces the arrow at the end of a pressable row. */
+  trailing?: IconName;
   /** Draw the value (and icon) in the alert colour, for a state that needs attention. */
   warn?: boolean;
 }) {
@@ -37,7 +40,7 @@ export function SettingsRow({
       </View>
       <Text style={styles.label}>{label}</Text>
       {value ? <Text style={[styles.value, warn && { color: palette.danger, fontWeight: "700" }]}>{value}</Text> : null}
-      {busy ? <ActivityIndicator size="small" color={palette.muted} /> : onPress ? <Ionicons name={action ? "share-outline" : navigates ? "chevron-forward" : "open-outline"} size={17} color={palette.faint} /> : null}
+      {busy ? <ActivityIndicator size="small" color={palette.muted} /> : onPress ? <Ionicons name={trailing ?? (action ? "share-outline" : navigates ? "chevron-forward" : "open-outline")} size={17} color={palette.faint} /> : null}
     </>
   );
   const style = [styles.row, !last && styles.divider];

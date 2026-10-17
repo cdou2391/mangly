@@ -35,7 +35,7 @@ export async function show(contents: AlertContent[]): Promise<void> {
   for (const c of contents) {
     await Notifications.scheduleNotificationAsync({
       identifier: c.identifier,
-      content: { title: c.title, body: c.body, data: { ...OPEN_UPDATES } },
+      content: { title: c.title, body: c.body, data: c.data ?? { ...OPEN_UPDATES } },
       trigger: { channelId: CHANNEL_ID },
     });
   }

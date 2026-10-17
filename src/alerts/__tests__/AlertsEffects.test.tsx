@@ -11,6 +11,8 @@ jest.mock("@/api/endpoints", () => ({ trackingApi: { list: jest.fn() } }));
 jest.mock("@/auth/AuthContext", () => ({ useAuth: jest.fn() }));
 jest.mock("expo-router", () => ({ router: { navigate: jest.fn() } }));
 jest.mock("expo-notifications", () => ({ useLastNotificationResponse: jest.fn() }));
+const mockOpenChapter = jest.fn();
+jest.mock("@/hooks/useOpenChapter", () => ({ useOpenChapter: () => mockOpenChapter }));
 jest.mock("../control", () => ({ attachUser: jest.fn(), markSeen: jest.fn(async () => {}), resume: jest.fn(async () => {}), turnOn: jest.fn(async () => "on") }));
 
 const list = trackingApi.list as jest.Mock;
@@ -138,3 +140,94 @@ describe("tapping a notification", () => {
     expect(router.navigate).not.toHaveBeenCalled();
   });
 });
+
+describe("tapping a notification for one chapter", () => {
+  const chapter = { screen: "updates", alertId: 5, mangaId: 50, chapter: "Chapter 191", chapterUrl: "https://x.test/191" };
+
+  it("opens Updates first, then the chapter, marked read like a tap on a row of the feed", async () => {
+    list.mockResolvedValue([{ id: 12, manga_id: 50 }]);
+    const view = await mount();
+    await waitFor(() => expect(list).toHaveBeenCalled());
+    await act(async () => {}); // the library has loaded
+    lastResponse.mockReturnValue(tap(chapter));
+    await view.rerender(
+      <QueryClientProvider client={client}>
+        <AlertsEffects />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(mockOpenChapter).toHaveBeenCalledTimes(1));
+    expect(router.navigate).toHaveBeenCalledWith("/updates");
+    expect((router.navigate as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(mockOpenChapter.mock.invocationCallOrder[0]);
+    expect(mockOpenChapter).toHaveBeenCalledWith({
+      notification_id: 5, manga_id: 50, chapter: "Chapter 191", chapter_url: "https://x.test/191", tracking_id: 12, unread: true,
+    });
+  });
+
+  it("opens the chapter even when the library is not known yet or does not have the title", async () => {
+    list.mockResolvedValue([{ id: 99, manga_id: 1 }]);
+    lastResponse.mockReturnValue(tap(chapter));
+    await mount();
+    await waitFor(() => expect(mockOpenChapter).toHaveBeenCalled());
+    expect(mockOpenChapter.mock.calls[0][0]).toMatchObject({ manga_id: 50, tracking_id: null, chapter_url: "https://x.test/191" });
+  });
+
+  it("opens the title instead when the alert has no usable link (it is passed on without one)", async () => {
+    lastResponse.mockReturnValue(tap({ ...chapter, chapterUrl: "javascript:alert(1)" }));
+    await mount();
+    await waitFor(() => expect(mockOpenChapter).toHaveBeenCalled());
+    expect(mockOpenChapter.mock.calls[0][0].chapter_url).toBeNull();
+  });
+
+  it("only opens Updates for a summary, or a notification from an older version", async () => {
+    lastResponse.mockReturnValue(tap({ screen: "updates" }, "alerts-summary"));
+    await mount();
+    await waitFor(() => expect(router.navigate).toHaveBeenCalledWith("/updates"));
+    await act(async () => {});
+    expect(mockOpenChapter).not.toHaveBeenCalled();
+  });
+
+  it("opens the chapter once for one tap, however often the app re-renders", async () => {
+    lastResponse.mockReturnValue(tap(chapter));
+    const view = await mount();
+    lastResponse.mockReturnValue(tap(chapter)); // the same tap, as a new object
+    await view.rerender(
+      <QueryClientProvider client={client}>
+        <AlertsEffects />
+      </QueryClientProvider>,
+    );
+    await act(async () => {});
+    expect(mockOpenChapter).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens each notification that is tapped", async () => {
+    lastResponse.mockReturnValue(tap(chapter, "alert-5"));
+    const view = await mount();
+    await waitFor(() => expect(mockOpenChapter).toHaveBeenCalledTimes(1));
+    lastResponse.mockReturnValue(tap({ ...chapter, alertId: 6, chapter: "192" }, "alert-6"));
+    await view.rerender(
+      <QueryClientProvider client={client}>
+        <AlertsEffects />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(mockOpenChapter).toHaveBeenCalledTimes(2));
+    expect(mockOpenChapter.mock.calls[1][0].chapter).toBe("192");
+  });
+
+  it("opens nothing for nobody", async () => {
+    (useAuth as jest.Mock).mockReturnValue({ state: { status: "signedOut" } });
+    lastResponse.mockReturnValue(tap(chapter));
+    await mount();
+    await act(async () => {});
+    expect(mockOpenChapter).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it("ignores a notification that is not one of ours, even with a chapter in it", async () => {
+    lastResponse.mockReturnValue(tap({ alertId: 5, mangaId: 50, chapter: "1" }));
+    await mount();
+    await act(async () => {});
+    expect(mockOpenChapter).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+});
+

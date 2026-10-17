@@ -1,4 +1,4 @@
-import { dismissAll, hasPermission, requestPermission } from "./notify";
+import { OPEN_UPDATES, dismissAll, hasPermission, requestPermission, show } from "./notify";
 import { registerAlertsTask, unregisterAlertsTask } from "./registration";
 import { clearState, EMPTY, patchState, readState, type AlertsState } from "./state";
 
@@ -50,6 +50,13 @@ export async function turnOff(): Promise<void> {
 /** Keep the schedule in step with the saved choice (the app can be restarted, updated or restored with the task gone). */
 export async function resume(): Promise<void> {
   if (await isOn()) await registerAlertsTask();
+}
+
+/** Shows a notification like a real one, so the user can see that they work. "no-permission": the system is blocking them. */
+export async function sendTestNotification(): Promise<"sent" | "no-permission"> {
+  if (!(await hasPermission())) return "no-permission";
+  await show([{ identifier: "alerts-test", title: "MangaPulse", body: "Notifications are working. New chapters will show up like this.", data: { ...OPEN_UPDATES } }]);
+  return "sent";
 }
 
 /** On sign-out: no background checks, nothing remembered, and no notification left over from this account. */
