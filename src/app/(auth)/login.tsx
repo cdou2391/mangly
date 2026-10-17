@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { z } from "zod";
 import { useAuth } from "@/auth/AuthContext";
 import { WEB_URL } from "@/config";
+import { openInBrowser } from "@/utils/browser";
 import { AuthButton } from "@/components/auth/AuthButton";
 import { AuthField } from "@/components/auth/AuthField";
 import { AuthFooter, OrDivider } from "@/components/auth/AuthFooter";
@@ -87,7 +87,7 @@ export default function Login() {
       <Pressable
         accessibilityRole="link"
         hitSlop={10}
-        onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/forgot-password`)}
+        onPress={() => openInBrowser(`${WEB_URL}/forgot-password`)}
         style={{ alignSelf: "flex-end", marginTop: 12 }}
       >
         <Text style={{ color: auth.red, fontSize: 15, fontWeight: "600" }}>Forgot password?</Text>

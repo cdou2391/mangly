@@ -3,7 +3,6 @@ import { Alert, ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleS
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Constants from "expo-constants";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { useQuery } from "@tanstack/react-query";
 import { useAlertSetting } from "@/alerts";
 import { trackingApi } from "@/api/endpoints";
@@ -17,6 +16,7 @@ import { LibraryStats } from "@/components/settings/LibraryStats";
 import { ProfileCard } from "@/components/settings/ProfileCard";
 import { SettingsGroup, SettingsRow, SettingsSwitchRow } from "@/components/settings/SettingsRow";
 import { EXPORT_TYPES, type ExportFormat } from "@/utils/exportLibrary";
+import { openInBrowser } from "@/utils/browser";
 import { countByFilter } from "@/utils/library";
 import { palette } from "@/theme";
 
@@ -124,8 +124,8 @@ export default function Settings() {
 
           <SettingsGroup title="HELP & ABOUT">
             <SettingsRow icon={online ? "cloud-done-outline" : "cloud-offline-outline"} label="Connection" value={online ? "Online" : "Offline"} warn={!online} />
-            <SettingsRow icon="globe-outline" label="MangaPulse on the web" onPress={() => WebBrowser.openBrowserAsync(WEB_URL)} />
-            <SettingsRow icon="key-outline" label="Reset password" onPress={() => WebBrowser.openBrowserAsync(`${WEB_URL}/forgot-password`)} />
+            <SettingsRow icon="globe-outline" label="MangaPulse on the web" onPress={() => openInBrowser(WEB_URL)} />
+            <SettingsRow icon="key-outline" label="Reset password" onPress={() => openInBrowser(`${WEB_URL}/forgot-password`)} />
             <SettingsRow icon="information-circle-outline" label="Version" value={VERSION} last />
           </SettingsGroup>
 

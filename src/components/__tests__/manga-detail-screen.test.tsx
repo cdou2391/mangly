@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
+import { BROWSER_OPTIONS } from "@/utils/browser";
 import MangaDetail from "@/app/manga/[id]";
 import { trackingApi } from "@/api/endpoints";
 import { ApiError } from "@/api/client";
@@ -11,7 +12,7 @@ import type { TrackedManga } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({ trackingApi: { list: jest.fn(), update: jest.fn(), remove: jest.fn() } }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) }, useLocalSearchParams: jest.fn() }));
-jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
+jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})), warmUpAsync: jest.fn(async () => ({})), mayInitWithUrlAsync: jest.fn(async () => ({})) }));
 
 const list = trackingApi.list as jest.Mock;
 const update = trackingApi.update as jest.Mock;
@@ -106,11 +107,33 @@ describe("the page", () => {
   });
 });
 
+describe("getting the browser ready", () => {
+  it("tells the browser about the latest chapter, which is the page most often opened from here", async () => {
+    await renderDetail();
+    await screen.findByText("Naruto");
+    await waitFor(() => expect(WebBrowser.mayInitWithUrlAsync).toHaveBeenCalledWith("https://x.test/latest"));
+    expect(WebBrowser.warmUpAsync).toHaveBeenCalled();
+  });
+
+  it("falls back to the title's own latest link when its site record has none", async () => {
+    list.mockResolvedValue([item({ preferred_source_record: null })]);
+    await renderDetail();
+    await waitFor(() => expect(WebBrowser.mayInitWithUrlAsync).toHaveBeenCalledWith("https://x.test/700.5"));
+  });
+
+  it("still opens pages when the browser cannot be warmed up", async () => {
+    (WebBrowser.warmUpAsync as jest.Mock).mockRejectedValueOnce(new Error("no Custom Tabs browser"));
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Read latest chapter" }));
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/latest", BROWSER_OPTIONS);
+  });
+});
+
 describe("reading", () => {
   it("opens the latest chapter", async () => {
     await renderDetail();
     await fireEvent.press(await screen.findByRole("button", { name: "Read latest chapter" }));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/latest");
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/latest", BROWSER_OPTIONS);
   });
 
   it("marks the latest chapter as read, saving the bare number the way the web app does", async () => {
@@ -327,7 +350,7 @@ describe("going back to the chapter", () => {
     list.mockResolvedValue([item({ last_chapter_url: LINK })]);
     await renderDetail();
     await fireEvent.press(await screen.findByRole("button", { name: "Continue reading" }));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(LINK);
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(LINK, BROWSER_OPTIONS);
   });
 
   it("has nothing to continue from when no chapter was ever opened", async () => {
@@ -352,7 +375,7 @@ describe("going back to the chapter", () => {
   it("opens the title on its site, without touching your progress", async () => {
     await renderDetail();
     await fireEvent.press(await screen.findByRole("link", { name: "Open on MangaRead" }));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/naruto/");
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/naruto/", BROWSER_OPTIONS);
     expect(update).not.toHaveBeenCalled();
   });
 

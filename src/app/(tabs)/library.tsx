@@ -20,6 +20,7 @@ import { useOpenChapter } from "@/hooks/useOpenChapter";
 import { useFollowPick, useHomePicks } from "@/hooks/useHomePicks";
 import { useSortPreference } from "@/hooks/useSortPreference";
 import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
+import { useWarmBrowser } from "@/hooks/useWarmBrowser";
 import { fromRecent } from "@/utils/feed";
 import { palette } from "@/theme";
 
@@ -32,6 +33,7 @@ export default function Library() {
   const listRef = useRef<FlatList<TrackedManga>>(null);
   const controlsY = useRef(0); // where the search field starts in the list, to scroll back to when the page changes
   const openChapter = useOpenChapter();
+  useWarmBrowser();
 
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
   const recent = useQuery({ queryKey: ["recent-chapters"], queryFn: trackingApi.recentChapters });

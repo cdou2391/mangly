@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
+import { BROWSER_OPTIONS } from "@/utils/browser";
 import Library from "@/app/(tabs)/library";
 import { notificationsApi, trackingApi } from "@/api/endpoints";
 import type { AppNotification, RecentChapter, TrackedManga } from "@/api/types";
@@ -123,7 +124,7 @@ it("opens the chapter link from the rail, or the title when there is no link", a
   await renderLibrary();
   await screen.findByText("NEW FOR YOU");
   await fireEvent.press(screen.getByRole("button", { name: "Chainsaw Man, Ch. 191, new" }));
-  expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/191");
+  expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/191", BROWSER_OPTIONS);
 
   await fireEvent.press(screen.getByRole("button", { name: "Dandadan, Ch. 164, new" }));
   expect(router.push).toHaveBeenCalledWith({ pathname: "/manga/[id]", params: { id: "3" } });
@@ -277,7 +278,7 @@ describe("marking a chapter as read from NEW FOR YOU", () => {
     serverCatchesUp();
     await renderLibrary();
     await fireEvent.press(await screen.findByRole("button", CARD));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(url);
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(url, BROWSER_OPTIONS);
     expect(update).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledWith(2, { last_chapter_read: "191", last_chapter_url: url });
   });
@@ -310,7 +311,7 @@ describe("marking a chapter as read from NEW FOR YOU", () => {
     await renderLibrary();
     await fireEvent.press(await screen.findByRole("button", CARD));
     // the save has not finished, yet the chapter is already open: reading never waits on the network
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(url);
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(url, BROWSER_OPTIONS);
     expect(update).toHaveBeenCalledTimes(1);
     await act(async () => finish());
   });

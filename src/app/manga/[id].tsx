@@ -3,14 +3,15 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "re
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as WebBrowser from "expo-web-browser";
 import { trackingApi } from "@/api/endpoints";
 import type { ReadingStatus, TrackedManga, TrackedMangaUpdate } from "@/api/types";
 import { BackBar } from "@/components/detail/BackBar";
 import { Cover } from "@/components/Cover";
 import { ProgressEditor } from "@/components/detail/ProgressEditor";
 import { RatingStars } from "@/components/detail/RatingStars";
+import { useWarmBrowser } from "@/hooks/useWarmBrowser";
 import { ErrorNote, Loading, Screen } from "@/components/ui";
+import { openInBrowser } from "@/utils/browser";
 import { chapterToStore, formatChapter, parseChapter, readProgress, shortChapter, urlChapter } from "@/utils/chapters";
 import { sourceName } from "@/utils/sources";
 import { palette } from "@/theme";
@@ -36,6 +37,8 @@ export default function MangaDetail() {
   // The list endpoint already carries everything the detail view needs; no extra request.
   const q = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
   const item = q.data?.find((i) => i.id === trackingId);
+  // The latest chapter is the page most often opened from here, so the browser is told about it ahead of the tap.
+  useWarmBrowser(item ? (item.preferred_source_record?.latest_chapter_url ?? item.manga.latest_chapter_url) : null);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tracked"] });
   const update = useMutation({
@@ -189,7 +192,7 @@ export default function MangaDetail() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Read latest chapter"
-            onPress={() => WebBrowser.openBrowserAsync(latestUrl)}
+            onPress={() => openInBrowser(latestUrl)}
             style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
           >
             <Ionicons name="book-outline" size={19} color="#fff" />
@@ -215,7 +218,7 @@ export default function MangaDetail() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Continue reading"
-                onPress={() => WebBrowser.openBrowserAsync(continueUrl)}
+                onPress={() => openInBrowser(continueUrl)}
                 style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]}
               >
                 <Ionicons name="play-outline" size={18} color={palette.text} />
@@ -226,7 +229,7 @@ export default function MangaDetail() {
               <Pressable
                 accessibilityRole="link"
                 accessibilityLabel={`Open on ${site ?? "the source site"}`}
-                onPress={() => WebBrowser.openBrowserAsync(sourceUrl)}
+                onPress={() => openInBrowser(sourceUrl)}
                 style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]}
               >
                 <Ionicons name="open-outline" size={18} color={palette.text} />

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
+import { BROWSER_OPTIONS } from "@/utils/browser";
 import Settings from "@/app/(tabs)/settings";
 import { useAlertSetting } from "@/alerts";
 import { useAuth } from "@/auth/AuthContext";
@@ -113,9 +114,9 @@ describe("help and about", () => {
   it("opens the web app and the password reset page", async () => {
     await renderSettings();
     await fireEvent.press(await screen.findByRole("link", { name: "MangaPulse on the web" }));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://web.test");
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://web.test", BROWSER_OPTIONS);
     await fireEvent.press(screen.getByRole("link", { name: "Reset password" }));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://web.test/forgot-password");
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://web.test/forgot-password", BROWSER_OPTIONS);
   });
 
   it("shows the app version", async () => {

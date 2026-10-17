@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
+import { BROWSER_OPTIONS } from "@/utils/browser";
 import Updates from "@/app/(tabs)/updates";
 import { notificationsApi, trackingApi } from "@/api/endpoints";
 import type { AppNotification, RecentChapter, TrackedManga } from "@/api/types";
@@ -13,7 +14,7 @@ jest.mock("@/api/endpoints", () => ({
   notificationsApi: { list: jest.fn(), markRead: jest.fn(), markAllRead: jest.fn(), clearRead: jest.fn() },
 }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
-jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
+jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})), warmUpAsync: jest.fn(async () => ({})), mayInitWithUrlAsync: jest.fn(async () => ({})) }));
 
 const listTracked = trackingApi.list as jest.Mock;
 const recentChapters = trackingApi.recentChapters as jest.Mock;
@@ -152,6 +153,14 @@ describe("the feed", () => {
   });
 });
 
+describe("getting the browser ready", () => {
+  it("starts the browser while the feed is showing, so a chapter opens faster", async () => {
+    await renderUpdates();
+    await row(/^Chainsaw Man\. Ch\. 191/);
+    expect(WebBrowser.warmUpAsync).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("loading and failing", () => {
   it("explains a failure when nothing could be loaded, and retries", async () => {
     listAlerts.mockRejectedValue(new Error("Network error."));
@@ -175,7 +184,7 @@ describe("opening a chapter", () => {
   it("an unread alert opens the chapter and is marked read; the server moves the progress, so the app does not", async () => {
     await renderUpdates();
     await fireEvent.press(await row(/^Chainsaw Man\. Ch\. 191/));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/1/191");
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/1/191", BROWSER_OPTIONS);
     expect(markAlertRead).toHaveBeenCalledWith(11);
     expect(update).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole("button", { name: /^Chainsaw Man\. Ch\. 191\..*\bread\b/ })).toBeTruthy());
@@ -210,7 +219,7 @@ describe("opening a chapter", () => {
   it("a latest chapter with no alert behind it is saved as the title's progress", async () => {
     await renderUpdates();
     await fireEvent.press(await row(/^Dandadan\. Ch\. 164/));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/2/164");
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/2/164", BROWSER_OPTIONS);
     expect(update).toHaveBeenCalledWith(20, { last_chapter_read: "164", last_chapter_url: "https://x.test/2/164" });
     expect(markAlertRead).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole("button", { name: /^Dandadan\..*\bread\b/ })).toBeTruthy());
@@ -219,7 +228,7 @@ describe("opening a chapter", () => {
   it("opens something already read without saving anything", async () => {
     await renderUpdates();
     await fireEvent.press(await row(/^One Piece/));
-    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/3/1128");
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/3/1128", BROWSER_OPTIONS);
     expect(update).not.toHaveBeenCalled();
     expect(markAlertRead).not.toHaveBeenCalled();
   });

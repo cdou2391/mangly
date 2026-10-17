@@ -206,3 +206,14 @@ Settings → YOUR LIBRARY → **All your stats** opens a screen computed entirel
 - **Figures:** titles (and how many were added in the last 30 days), chapters read, chapters to catch up (and across how many titles), average rating (one decimal, rated titles only).
 - **Charts:** status split (stacked bar and legend), rating counts 5 to 1, the eight most common genres (case and spacing ignored, a genre counted once per title), titles per site, and the three titles furthest behind (tap to open).
 - **Caveats:** "chapters read" is the whole part of the chapter number last saved in each title (a title with a label without a number counts 0), so it is a close figure for series numbered from 1, not a count of chapters actually opened. "Behind" ignores titles not started, as the Library does.
+
+## Opening chapters and links
+
+Every link out of the app (chapters, a title's page on its source site, the web app, the password reset page) goes through `openInBrowser` in `src/utils/browser.ts`, which opens Chrome's Custom Tab (not a WebView) with `BROWSER_OPTIONS`:
+
+- **`createTask: false`** keeps the tab in the app's own task, so it does not appear as a separate entry in Android's recent apps and Back returns to the app. The cost: if Android has to end the app's process while the tab is open, the tab closes with it (the default, a separate task through a proxy activity, survives that).
+- **Look:** the toolbar takes the app's colours, shows the page title and slides away while scrolling.
+- **Warm-up:** the Library, Updates and title screens call `useWarmBrowser`, which starts the browser (`warmUpAsync`) and, on the title page, tells it the latest chapter's link is likely next (`mayInitWithUrlAsync`), so the page opens faster. It is only a hint: it never throws and never delays opening a link.
+
+A real in-app reader (a WebView with the app's own header, or chapter images drawn natively) is deliberately not built; see the discussion of trade-offs (bot checks on the source sites in a WebView, ad handling, security of loading untrusted pages in the app, and the legal side of serving chapter images).
+

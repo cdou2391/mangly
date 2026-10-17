@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
+import { openInBrowser } from "@/utils/browser";
 import type { FeedItem } from "@/utils/feed";
 import { useMarkChapterRead } from "./useMarkChapterRead";
 
@@ -18,7 +18,7 @@ export function useOpenChapter() {
         if (c.tracking_id !== null) router.push({ pathname: "/manga/[id]", params: { id: String(c.tracking_id) } });
         return;
       }
-      void WebBrowser.openBrowserAsync(c.chapter_url);
+      void openInBrowser(c.chapter_url);
       if (c.unread) markRead(c);
     },
     [markRead],

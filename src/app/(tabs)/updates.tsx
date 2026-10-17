@@ -10,6 +10,7 @@ import { useClearReadAlerts } from "@/hooks/useClearReadAlerts";
 import { useMarkAllRead } from "@/hooks/useMarkChapterRead";
 import { useOpenChapter } from "@/hooks/useOpenChapter";
 import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
+import { useWarmBrowser } from "@/hooks/useWarmBrowser";
 import { groupByDay } from "@/utils/feed";
 import { palette } from "@/theme";
 
@@ -18,6 +19,7 @@ export default function Updates() {
   const [filter, setFilter] = useState<FeedFilterKey>("all");
   const feed = useUpdatesFeed();
   const openChapter = useOpenChapter();
+  useWarmBrowser();
   const markAll = useMarkAllRead();
   const clearRead = useClearReadAlerts();
 
