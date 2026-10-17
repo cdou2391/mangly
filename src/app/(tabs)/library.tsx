@@ -1,25 +1,36 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useQuery } from "@tanstack/react-query";
 import { trackingApi } from "@/api/endpoints";
+import type { TrackedManga } from "@/api/types";
 import { Button, ErrorNote, Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { FilterChips } from "@/components/library/FilterChips";
 import { LibraryRow } from "@/components/library/LibraryRow";
 import { NewRail } from "@/components/library/NewRail";
 import { HeroPicks } from "@/components/library/HeroPicks";
-import { countByFilter, sortLibrary, type LibraryFilter } from "@/utils/library";
+import { LibraryControls } from "@/components/library/LibraryControls";
+import { Pager } from "@/components/library/Pager";
+import { countByFilter, type LibraryFilter } from "@/utils/library";
+import { applyView, hasUnread, isNarrowed, paginate, type LibraryView } from "@/utils/libraryView";
 import { FILTERS } from "@/utils/library";
 import { useOpenChapter } from "@/hooks/useOpenChapter";
 import { useFollowPick, useHomePicks } from "@/hooks/useHomePicks";
+import { useSortPreference } from "@/hooks/useSortPreference";
 import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
 import { fromRecent } from "@/utils/feed";
 import { palette } from "@/theme";
 
 export default function Library() {
   const [filter, setFilter] = useState<LibraryFilter>("all");
+  const [query, setQuery] = useState("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [sort, setSort] = useSortPreference();
+  const [pageNo, setPageNo] = useState(1);
+  const listRef = useRef<FlatList<TrackedManga>>(null);
+  const controlsY = useRef(0); // where the search field starts in the list, to scroll back to when the page changes
   const openChapter = useOpenChapter();
 
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
@@ -29,9 +40,28 @@ export default function Library() {
   const items = tracked.data;
   const picks = useHomePicks();
   const { states: followStates, follow } = useFollowPick();
-  const sorted = useMemo(() => sortLibrary(items ?? []), [items]);
   const counts = useMemo(() => countByFilter(items ?? []), [items]);
-  const shown = filter === "all" ? sorted : sorted.filter((i) => i.reading_status === filter);
+  const behindCount = useMemo(() => (items ?? []).filter(hasUnread).length, [items]);
+  // Search, filters and sorting run on the library already on the phone: instant, and the same offline. The list is shown a page at a time.
+  const view = useMemo<LibraryView>(() => ({ query, status: filter, unreadOnly, sort }), [query, filter, unreadOnly, sort]);
+  const visible = useMemo(() => applyView(items ?? [], view), [items, view]);
+  const page = useMemo(() => paginate(visible, pageNo), [visible, pageNo]);
+
+  // Any change to what is shown starts again from the first page.
+  const changeView = <T,>(set: (value: T) => void) => (value: T) => {
+    set(value);
+    setPageNo(1);
+  };
+  const goToPage = useCallback((next: number) => {
+    setPageNo(next);
+    listRef.current?.scrollToOffset({ offset: Math.max(0, controlsY.current - 8), animated: true });
+  }, []);
+  const clearView = () => {
+    setQuery("");
+    setFilter("all");
+    setUnreadOnly(false);
+    setPageNo(1);
+  };
   const fresh = useMemo(() => (recent.data ?? []).filter((c) => c.is_new).slice(0, 10), [recent.data]);
   const unreadCount = feed.unreadCount;
   // Only claim "all caught up" once both lists have loaded and there is something being followed; never while loading or after an error.
@@ -73,7 +103,19 @@ export default function Library() {
       <ScreenHeader title="Library" subtitle={subtitle} right={bell} />
       <HeroPicks picks={picks.data ?? []} settled={!picks.isPending} states={followStates} onFollow={follow} onSearch={() => router.navigate("/search")} />
       <NewRail chapters={fresh} caughtUp={caughtUp} onOpen={(c) => openChapter(fromRecent(c))} onSeeAll={() => router.navigate("/updates")} />
-      {items && items.length > 0 ? <FilterChips value={filter} counts={counts} onChange={setFilter} /> : null}
+      {items && items.length > 0 ? (
+        <View onLayout={(e) => (controlsY.current = e.nativeEvent.layout.y)}>
+          <LibraryControls query={query} onQuery={changeView(setQuery)} sort={sort} onSort={changeView(setSort)} />
+          <FilterChips
+            value={filter}
+            counts={counts}
+            onChange={changeView(setFilter)}
+            unreadOnly={unreadOnly}
+            unreadCount={behindCount}
+            onToggleUnread={() => changeView(setUnreadOnly)(!unreadOnly)}
+          />
+        </View>
+      ) : null}
     </>
   );
 
@@ -89,13 +131,15 @@ export default function Library() {
   return (
     <Screen padded={false}>
       <FlatList
+        ref={listRef}
         testID="library-list"
         // Android detaches off-screen views of a long list to save memory; with lists nested in the header that can leave blank
         // space or missing cards when the content above changes height (a new-chapter row appearing, for one).
         removeClippedSubviews={false}
-        data={tracked.isLoading ? [] : shown}
+        data={tracked.isLoading ? [] : page.items}
         keyExtractor={(i) => String(i.id)}
         ListHeaderComponent={header}
+        ListFooterComponent={<Pager page={page} onPage={goToPage} />}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={tracked.isRefetching} onRefresh={refresh} tintColor={palette.primary} colors={[palette.primary]} progressBackgroundColor={palette.card} />}
         renderItem={({ item }) => (
@@ -117,10 +161,19 @@ export default function Library() {
             </View>
           ) : (
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No titles here</Text>
+              <Text style={styles.emptyTitle}>{query.trim() ? "No matches" : "No titles here"}</Text>
               <Text style={styles.emptyHint}>
-                Nothing is marked "{FILTERS.find((f) => f.key === filter)?.label}" right now.
+                {query.trim()
+                  ? `Nothing in your library matches "${query.trim()}"${filter !== "all" || unreadOnly ? " with these filters" : ""}.`
+                  : filter !== "all"
+                    ? `Nothing is marked "${FILTERS.find((f) => f.key === filter)?.label}"${unreadOnly ? " with unread chapters" : ""} right now.`
+                    : "Nothing unread right now."}
               </Text>
+              {isNarrowed(view) ? (
+                <View style={{ alignSelf: "stretch", marginTop: 8 }}>
+                  <Button title="Clear search and filters" onPress={clearView} />
+                </View>
+              ) : null}
             </View>
           )
         }

@@ -20,7 +20,7 @@ The app is shown to users as **MangaPulse** (the code lives in the `mangly` repo
 | Area | State |
 |---|---|
 | Sign in / register / sign out | Implemented. Backend merged in MangaPulse PR #20; **must be deployed** for sign-in to work |
-| Library, title detail, status and progress edits | Implemented (existing API) |
+| Library (search, filters, sorting, pages of ten), title detail, status and progress edits | Implemented (existing API; search and paging run on the phone) |
 | Updates feed (alerts and new chapters in one list), search and track | Implemented (existing API) |
 | Home hero: Similar / Popular recommendations | Implemented. Needs MangaPulse `GET /manga/home-picks` (to be deployed) |
 | New-chapter notifications | Implemented (background check, no backend change). Delivery is delayed by Android, see ARCHITECTURE.md |
