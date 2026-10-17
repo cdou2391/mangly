@@ -46,3 +46,32 @@ export function chapterToStore(label: string): string {
   const n = parseChapter(label);
   return n === null ? label.trim() : String(n);
 }
+
+/** Highest chapter number the progress editor accepts; far above any real series, it only stops a typo from being saved. */
+export const MAX_CHAPTER = 99999;
+
+/** A chapter number typed by the reader ("188", "188.5", "188,5"), or null when it is not one. */
+export function parseDraft(text: string): number | null {
+  const t = text.trim().replace(",", ".");
+  if (!/^\d+(\.\d+)?$/.test(t)) return null;
+  const n = Number(t);
+  return n <= MAX_CHAPTER ? n : null;
+}
+
+/** A chapter number as text, without float noise: 188 -> "188", 188.5 -> "188.5". */
+export const formatChapter = (n: number): string => String(Math.round(n * 100) / 100);
+
+/** One chapter up or down from what is typed. Starts from 0 when the field is empty or not a number, and never goes below 0 or above MAX_CHAPTER. */
+export function stepChapter(text: string, by: 1 | -1): string {
+  const n = parseDraft(text) ?? 0;
+  return formatChapter(Math.min(MAX_CHAPTER, Math.max(0, n + by)));
+}
+
+/**
+ * The chapter number written in a chapter link ("…/chapter-188/", "…/chapter-188-5/"), or null when the link does not say
+ * (some sites link by an id). Used to notice a saved link that no longer belongs to the chapter the reader says they are on.
+ */
+export function urlChapter(url: string | null | undefined): number | null {
+  const m = url?.match(/(?:chapter|ch|episode|ep)[-_/]?(\d+(?:[.-]\d+)?)/i);
+  return m ? Number(m[1].replace("-", ".")) : null;
+}

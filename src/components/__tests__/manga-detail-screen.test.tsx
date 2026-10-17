@@ -134,6 +134,236 @@ describe("reading", () => {
   });
 });
 
+describe("setting the chapter by hand", () => {
+  const field = () => screen.getByLabelText("Chapter you are up to");
+  const save = () => screen.getByRole("button", { name: "Save progress" });
+  const open = async () => {
+    await renderDetail();
+    await screen.findByText("I'M UP TO CHAPTER");
+  };
+
+  it("starts from the saved chapter, with nothing to save yet", async () => {
+    await open();
+    expect(field().props.value).toBe("698");
+    expect(save().props.accessibilityState.disabled).toBe(true);
+  });
+
+  it("starts empty when you have not started, and the first step up is chapter 1", async () => {
+    list.mockResolvedValue([item({ last_chapter_read: null })]);
+    await open();
+    expect(field().props.value).toBe("");
+    await fireEvent.press(screen.getByRole("button", { name: "Next chapter" }));
+    expect(field().props.value).toBe("1");
+  });
+
+  it("reads the chapter number out of a saved label", async () => {
+    list.mockResolvedValue([item({ last_chapter_read: "Chapter 188.5" })]);
+    await open();
+    expect(field().props.value).toBe("188.5");
+  });
+
+  it("steps one chapter at a time, and not below 0", async () => {
+    await open();
+    await fireEvent.press(screen.getByRole("button", { name: "Next chapter" }));
+    expect(field().props.value).toBe("699");
+    await fireEvent.press(screen.getByRole("button", { name: "Previous chapter" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Previous chapter" }));
+    expect(field().props.value).toBe("697");
+    await fireEvent.changeText(field(), "0");
+    expect(screen.getByRole("button", { name: "Previous chapter" }).props.accessibilityState?.disabled ?? screen.getByRole("button", { name: "Previous chapter" }).props.disabled).toBeTruthy();
+  });
+
+  it("saves the chapter typed, and only that", async () => {
+    await open();
+    await fireEvent.changeText(field(), "650");
+    expect(save().props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(save());
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(44, { last_chapter_read: "650" });
+  });
+
+  it("accepts a decimal chapter, with a comma too", async () => {
+    await open();
+    await fireEvent.changeText(field(), "650,5");
+    await fireEvent.press(save());
+    expect(update).toHaveBeenCalledWith(44, { last_chapter_read: "650.5" });
+  });
+
+  it("also saves the link to the chapter when you say you are on the latest one", async () => {
+    await open();
+    await fireEvent.changeText(field(), "700.5");
+    await fireEvent.press(save());
+    expect(update).toHaveBeenCalledWith(44, { last_chapter_read: "700.5", last_chapter_url: "https://x.test/700.5" });
+  });
+
+  it("drops anything that is not a number as it is typed", async () => {
+    await open();
+    await fireEvent.changeText(field(), "6a5-0");
+    expect(field().props.value).toBe("650");
+  });
+
+  it("will not save something that is not a chapter number, and says so", async () => {
+    await open();
+    await fireEvent.changeText(field(), "6.5.1");
+    expect(save().props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText("Use a chapter number, like 188 or 188.5.")).toBeTruthy();
+    await fireEvent.press(save());
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("will not save the chapter that is already saved", async () => {
+    await open();
+    await fireEvent.changeText(field(), "698.0");
+    expect(save().props.accessibilityState.disabled).toBe(true);
+  });
+
+  it("shows the new chapter at once and fills the progress bar, then keeps it once saved", async () => {
+    let saved = "698";
+    list.mockImplementation(async () => [item({ last_chapter_read: saved })]);
+    update.mockImplementation(async (_id: number, body: { last_chapter_read?: string }) => {
+      if (body.last_chapter_read) saved = body.last_chapter_read;
+      return {};
+    });
+    await open();
+    await fireEvent.changeText(field(), "600");
+    await fireEvent.press(save());
+    expect(await screen.findByText("Ch. 600")).toBeTruthy();
+    await waitFor(() => expect(save().props.accessibilityState.busy).toBe(false));
+    expect(screen.getByText("Ch. 600")).toBeTruthy();
+    expect(field().props.value).toBe("600");
+  });
+
+  it("puts the old chapter back, with the reason, when it cannot be saved", async () => {
+    update.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    await open();
+    await fireEvent.changeText(field(), "600");
+    await fireEvent.press(save());
+    expect(await screen.findByText("Can't reach MangaPulse. Check your connection and try again later.")).toBeTruthy();
+    expect(screen.getByText("Ch. 698")).toBeTruthy();
+    expect(screen.queryByText("Ch. 600")).toBeNull();
+    expect(field().props.value).toBe("600"); // what you typed stays, so you can try again
+    expect(save().props.accessibilityState.disabled).toBe(false);
+  });
+
+  it("shows the new chapter while saving, and goes back to the old one if that fails", async () => {
+    let fail!: () => void;
+    update.mockReturnValue(new Promise((_, reject) => (fail = () => reject(new Error("Network error. Check your connection.")))));
+    await open();
+    await fireEvent.changeText(field(), "600");
+    await fireEvent.press(save());
+    expect(await screen.findByText("Ch. 600")).toBeTruthy();
+    expect(screen.queryByText("Ch. 698")).toBeNull();
+    await act(async () => fail());
+    expect(await screen.findByText("Network error. Check your connection.")).toBeTruthy();
+    expect(screen.getByText("Ch. 698")).toBeTruthy();
+    expect(field().props.value).toBe("600");
+  });
+
+  it("tries again with the same number after a failure", async () => {
+    update.mockRejectedValueOnce(new Error("Network error. Check your connection."));
+    await open();
+    await fireEvent.changeText(field(), "600");
+    await fireEvent.press(save());
+    await screen.findByText("Network error. Check your connection.");
+    await fireEvent.press(save());
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    expect(update).toHaveBeenLastCalledWith(44, { last_chapter_read: "600" });
+  });
+
+  it("shows the chapter as the server keeps it once saved, not as it was typed", async () => {
+    let saved = "698";
+    list.mockImplementation(async () => [item({ last_chapter_read: saved })]);
+    update.mockImplementation(async (_id: number, body: { last_chapter_read?: string }) => {
+      if (body.last_chapter_read) saved = body.last_chapter_read;
+      return {};
+    });
+    await open();
+    await fireEvent.changeText(field(), "650,5");
+    await fireEvent.press(save());
+    await waitFor(() => expect(field().props.value).toBe("650.5"));
+  });
+
+  it("puts the old chapter back even when the library cannot be read again afterwards (offline)", async () => {
+    list.mockResolvedValueOnce([item()]).mockRejectedValue(new ApiError(0, "Can't reach MangaPulse."));
+    update.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    await open();
+    await fireEvent.changeText(field(), "600");
+    await fireEvent.press(save());
+    expect(await screen.findByText("Can't reach MangaPulse. Check your connection and try again later.")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Ch. 698")).toBeTruthy());
+    expect(screen.queryByText("Ch. 600")).toBeNull();
+  });
+
+  it("goes back to following the saved chapter once marked as read from the button", async () => {
+    let saved = "698";
+    list.mockImplementation(async () => [item({ last_chapter_read: saved })]);
+    update.mockImplementation(async (_id: number, body: { last_chapter_read?: string }) => {
+      if (body.last_chapter_read) saved = body.last_chapter_read;
+      return {};
+    });
+    await open();
+    await fireEvent.changeText(field(), "650");
+    await fireEvent.press(screen.getByRole("button", { name: "Mark Ch. 700.5 as read" }));
+    await waitFor(() => expect(field().props.value).toBe("700.5"));
+  });
+
+  it("does not take a second save while one is going", async () => {
+    let finish!: () => void;
+    update.mockReturnValue(new Promise((resolve) => (finish = () => resolve({}))));
+    await open();
+    await fireEvent.changeText(field(), "600");
+    await fireEvent.press(save());
+    await waitFor(() => expect(save().props.accessibilityState.busy).toBe(true));
+    await fireEvent.press(save());
+    expect(update).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+  });
+});
+
+describe("going back to the chapter", () => {
+  const LINK = "https://x.test/naruto/chapter-698/";
+
+  it("continues reading from the chapter you last opened", async () => {
+    list.mockResolvedValue([item({ last_chapter_url: LINK })]);
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Continue reading" }));
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(LINK);
+  });
+
+  it("has nothing to continue from when no chapter was ever opened", async () => {
+    await renderDetail();
+    await screen.findByText("Naruto");
+    expect(screen.queryByRole("button", { name: "Continue reading" })).toBeNull();
+  });
+
+  it("hides a saved link that is plainly for another chapter than the one you are on", async () => {
+    list.mockResolvedValue([item({ last_chapter_read: "650", last_chapter_url: LINK })]);
+    await renderDetail();
+    await screen.findByText("Naruto");
+    expect(screen.queryByRole("button", { name: "Continue reading" })).toBeNull();
+  });
+
+  it("keeps a link that does not say which chapter it is for", async () => {
+    list.mockResolvedValue([item({ last_chapter_read: "650", last_chapter_url: "https://weeb.test/chapters/01HQ8ZXK3N" })]);
+    await renderDetail();
+    expect(await screen.findByRole("button", { name: "Continue reading" })).toBeTruthy();
+  });
+
+  it("opens the title on its site, without touching your progress", async () => {
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("link", { name: "Open on MangaRead" }));
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/naruto/");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("has no site to open when the title has none", async () => {
+    list.mockResolvedValue([item({ preferred_source_record: null })]);
+    await renderDetail();
+    await screen.findByText("Naruto");
+    expect(screen.queryByRole("link", { name: /^Open on/ })).toBeNull();
+  });
+});
+
 describe("changing the title", () => {
   it("sets the reading status, marking the current one", async () => {
     await renderDetail();

@@ -15,12 +15,16 @@ export function ResultCard({
   state,
   onTrack,
   onOpen,
+  onPreview,
 }: {
   group: TitleGroup;
   inLibrary: boolean;
   state: TrackState | undefined;
   onTrack: () => void;
+  /** Tapping a title that is in the library opens it there. */
   onOpen: () => void;
+  /** Tapping any other title shows a preview of it. */
+  onPreview: () => void;
 }) {
   const adding = state?.phase === "adding";
   const failed = state?.phase === "failed";
@@ -34,11 +38,10 @@ export function ResultCard({
     <View style={styles.card}>
       <Pressable
         accessible
-        accessibilityRole={added ? "button" : undefined} // only a button when it does something: it opens titles already in the library
+        accessibilityRole="button"
         accessibilityLabel={spoken}
-        accessibilityHint={added ? "Opens it in your library" : undefined}
-        disabled={!added}
-        onPress={onOpen}
+        accessibilityHint={added ? "Opens it in your library" : "Shows a preview"}
+        onPress={added ? onOpen : onPreview}
         style={styles.main}
       >
         <Cover uri={group.cover_url} style={styles.cover} />

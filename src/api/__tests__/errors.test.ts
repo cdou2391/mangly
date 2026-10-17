@@ -32,3 +32,12 @@ describe("describeError when registering", () => {
     expect(describeError(new ApiError(409, "An account with this email already exists."), "register")).toBe("An account with this email already exists.");
   });
 });
+
+describe("describeError when previewing", () => {
+  it("says the source site may be down for a server error, and keeps the other wording", () => {
+    expect(describeError(new ApiError(502, "Could not fetch"), "preview")).toMatch(/Couldn't load the preview.*source site may be down/);
+    expect(describeError(new ApiError(429, "Rate limit exceeded"), "preview")).toMatch(/too fast/);
+    expect(describeError(new ApiError(0, "Network error. Check your connection."), "preview")).toBe("Network error. Check your connection.");
+    expect(describeError(new ApiError(400, "Invalid manga URL for source 'x'"), "preview")).toBe("Invalid manga URL for source 'x'");
+  });
+});

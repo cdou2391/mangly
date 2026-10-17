@@ -9,11 +9,13 @@ import { trackingApi } from "@/api/endpoints";
 import { useOnline } from "@/api/reachability";
 import { useAuth } from "@/auth/AuthContext";
 import { WEB_URL } from "@/config";
+import { shareLibrary } from "@/export/shareLibrary";
 import { Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { LibraryStats } from "@/components/settings/LibraryStats";
 import { ProfileCard } from "@/components/settings/ProfileCard";
 import { SettingsGroup, SettingsRow, SettingsSwitchRow } from "@/components/settings/SettingsRow";
+import { EXPORT_TYPES, type ExportFormat } from "@/utils/exportLibrary";
 import { countByFilter } from "@/utils/library";
 import { palette } from "@/theme";
 
@@ -22,6 +24,7 @@ const VERSION = Constants.expoConfig?.version ?? "dev";
 export default function Settings() {
   const { state, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const online = useOnline();
   const alerts = useAlertSetting();
   // The library list is already kept fresh by every screen that changes it, so the numbers are counted from it
@@ -30,6 +33,22 @@ export default function Settings() {
   const counts = useMemo(() => (tracked.data ? countByFilter(tracked.data) : null), [tracked.data]);
   if (state.status !== "signedIn") return null;
   const { user } = state;
+
+  const exportLibrary = async (format: ExportFormat) => {
+    if (!tracked.data || exporting) return;
+    if (tracked.data.length === 0) {
+      Alert.alert("Nothing to export", "Your library is empty. Add a title first.");
+      return;
+    }
+    setExporting(format);
+    try {
+      await shareLibrary(format, tracked.data);
+    } catch (e) {
+      Alert.alert("Couldn't export your library", e instanceof Error ? e.message : "Something went wrong. Try again.");
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const confirmSignOut = () =>
     Alert.alert("Sign out?", "You will stop receiving push notifications on this device.", [
@@ -77,6 +96,20 @@ export default function Settings() {
               onChange={(v) => void alerts.set(v)}
               last
             />
+          </SettingsGroup>
+
+          <SettingsGroup title="YOUR DATA">
+            {(Object.keys(EXPORT_TYPES) as ExportFormat[]).map((format, i, all) => (
+              <SettingsRow
+                key={format}
+                icon={format === "csv" ? "grid-outline" : "code-slash-outline"}
+                label={`Export library as ${EXPORT_TYPES[format].label}`}
+                action
+                busy={exporting === format}
+                onPress={tracked.data ? () => void exportLibrary(format) : undefined}
+                last={i === all.length - 1}
+              />
+            ))}
           </SettingsGroup>
 
           <SettingsGroup title="HELP & ABOUT">

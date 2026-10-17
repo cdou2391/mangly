@@ -7,6 +7,7 @@ import { mangaApi, trackingApi } from "@/api/endpoints";
 import { describeError } from "@/api/errors";
 import { ErrorNote, Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { PreviewSheet } from "@/components/search/PreviewSheet";
 import { ResultCard } from "@/components/search/ResultCard";
 import { ResultsSkeleton } from "@/components/search/ResultsSkeleton";
 import { MIN_QUERY, SearchBar } from "@/components/search/SearchBar";
@@ -20,6 +21,7 @@ export default function Search() {
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
   const [source, setSource] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState<string | null>(null);
 
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
   // Searching can scrape the source sites and the server allows 20 searches a minute, so results are kept for a while and a failed
@@ -36,6 +38,12 @@ export default function Search() {
   const groups = useMemo(() => groupCandidates(results.data), [results.data]);
   const sources = useMemo(() => sourcesIn(groups), [groups]);
   const shown = useMemo(() => (source ? groups.filter((g) => g.candidates.some((c) => c.source === source)) : groups), [groups, source]);
+
+  const previewing = groups.find((g) => g.key === previewKey) ?? null;
+  const openTitle = (trackingId: number) => router.push({ pathname: "/manga/[id]", params: { id: String(trackingId) } });
+  const previewMatch = previewing ? findInLibrary(previewing, tracked.data) : undefined;
+  const previewState = previewing ? states[previewing.key] : undefined;
+  const previewTrackingId = previewMatch?.id ?? (previewState?.phase === "added" ? previewState.trackingId : null);
 
   const submit = useCallback(() => {
     const q = text.trim().replace(/\s+/g, " ");
@@ -114,11 +122,28 @@ export default function Search() {
                 inLibrary={!!match}
                 state={state}
                 onTrack={() => void track(item, source)}
-                onOpen={() => trackingId !== null && router.push({ pathname: "/manga/[id]", params: { id: String(trackingId) } })}
+                onOpen={() => trackingId !== null && openTitle(trackingId)}
+                onPreview={() => setPreviewKey(item.key)}
               />
             </View>
           );
         }}
+      />
+      <PreviewSheet
+        group={previewing}
+        preferredSource={source}
+        inLibrary={!!previewMatch}
+        state={previewState}
+        onTrack={(site) => previewing && void track(previewing, site)}
+        onOpenLibrary={
+          previewTrackingId !== null
+            ? () => {
+                setPreviewKey(null);
+                openTitle(previewTrackingId);
+              }
+            : null
+        }
+        onClose={() => setPreviewKey(null)}
       />
     </Screen>
   );

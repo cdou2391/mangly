@@ -1,4 +1,4 @@
-import { chapterToStore, parseChapter, readProgress, shortChapter, unreadChapters } from "../chapters";
+import { chapterToStore, formatChapter, parseChapter, parseDraft, readProgress, shortChapter, stepChapter, unreadChapters, urlChapter } from "../chapters";
 
 describe("parseChapter", () => {
   it.each([
@@ -75,5 +75,49 @@ describe("chapterToStore", () => {
   it("keeps a label that has no number", () => {
     expect(chapterToStore("  Oneshot ")).toBe("Oneshot");
     expect(chapterToStore("Prologue")).toBe("Prologue");
+  });
+});
+
+describe("typing a chapter", () => {
+  it("accepts whole and decimal numbers, with a comma too, and trims", () => {
+    expect(parseDraft("188")).toBe(188);
+    expect(parseDraft(" 188.5 ")).toBe(188.5);
+    expect(parseDraft("188,5")).toBe(188.5);
+    expect(parseDraft("0")).toBe(0);
+    expect(parseDraft("99999")).toBe(99999);
+  });
+  it("rejects anything else, and numbers beyond the limit", () => {
+    for (const bad of ["", "  ", "abc", "-1", "1.", ".5", "1.2.3", "Chapter 3", "100000"]) expect(parseDraft(bad)).toBeNull();
+  });
+  it("writes a number without float noise", () => {
+    expect(formatChapter(188)).toBe("188");
+    expect(formatChapter(188.5)).toBe("188.5");
+    expect(formatChapter(0.1 + 0.2)).toBe("0.3");
+  });
+  it("steps one chapter up or down, starting from 0 when there is nothing typed", () => {
+    expect(stepChapter("188", 1)).toBe("189");
+    expect(stepChapter("188", -1)).toBe("187");
+    expect(stepChapter("188.5", 1)).toBe("189.5");
+    expect(stepChapter("", 1)).toBe("1");
+    expect(stepChapter("abc", 1)).toBe("1");
+  });
+  it("stops at 0 and at the limit", () => {
+    expect(stepChapter("0", -1)).toBe("0");
+    expect(stepChapter("0.5", -1)).toBe("0");
+    expect(stepChapter("99999", 1)).toBe("99999");
+  });
+});
+
+describe("the chapter a link is for", () => {
+  it("reads the number from the link", () => {
+    expect(urlChapter("https://x.test/manga/naruto/chapter-188/")).toBe(188);
+    expect(urlChapter("https://x.test/manga/naruto/chapter-188-5/")).toBe(188.5);
+    expect(urlChapter("https://x.test/read/ch_12")).toBe(12);
+    expect(urlChapter("https://x.test/manga/ep/7")).toBe(7);
+  });
+  it("is null when the link does not say, or there is none", () => {
+    expect(urlChapter("https://weeb.test/chapters/01HQ8ZXK3N")).toBeNull();
+    expect(urlChapter(null)).toBeNull();
+    expect(urlChapter(undefined)).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ import { authApi } from "@/api/endpoints";
 import { ping, restoreSession, setSessionListener } from "@/api/client";
 import { setOnline, useOnline } from "@/api/reachability";
 import type { User } from "@/api/types";
+import { clearExports } from "@/export/shareLibrary";
 import { clearSnapshot, isUsable, loadSnapshot, restoreInto, startPersisting, type Snapshot } from "@/cache/store";
 import { stopAlerts } from "@/alerts";
 
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     applied.current = false;
     saved.current = Promise.resolve(null);
     void clearSnapshot();
+    clearExports(); // a shared copy of the library is also theirs
   }, []);
 
   // One attempt to restore the session. A good answer reaches `state` through the session listener (set up below), so only

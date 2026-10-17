@@ -30,3 +30,12 @@ describe("home picks", () => {
     expect(JSON.parse(call().init.body as string)).toEqual({ manga_id: 7 });
   });
 });
+
+describe("previewing a title", () => {
+  it("asks for the details of a page on a site, with the address and the site encoded", async () => {
+    fetchMock.mockResolvedValue(json({ title: "Berserk" }));
+    await mangaApi.details("https://mangaread.org/manga/berserk/?a=1&b=2", "mangaread");
+    expect(call().url).toMatch(/\/manga\/details\?url=https%3A%2F%2Fmangaread\.org%2Fmanga%2Fberserk%2F%3Fa%3D1%26b%3D2&source=mangaread$/);
+    expect(call().init.method ?? "GET").toBe("GET");
+  });
+});

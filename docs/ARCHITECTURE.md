@@ -21,6 +21,7 @@ src/
   api/            fetch client, endpoint functions, response types
   auth/           token storage, AuthProvider
   alerts/         new-chapter notifications: background check, permission, Settings switch
+  export/         writes the library to a file and opens the share sheet
   components/     shared UI
   theme.ts        light/dark tokens
 ```
@@ -154,3 +155,29 @@ The title page has a **YOUR RATING** section: five stars to tap (1 to 5), the ra
 - **Clear:** "Clear rating" sends `{ "rating": null }`. This needed a MangaPulse change: the API treated every null as "not sent" and so could never remove a rating. Now an explicit `rating: null` removes it, while leaving `rating` out leaves it alone and a null for any other field still means "leave it". Until that is deployed, clearing appears to work and then the rating comes back when the library is read again.
 - **Immediate, and put back on failure:** the new rating shows at once; if saving fails (offline, server trouble) it goes back to what it was with the usual "try again later" message, even when the library cannot be re-read. New taps wait while one is being saved.
 - The rating feeds the Library's "Highest rated" order, and the server's taste-judging (which needs at least three ratings).
+
+## Setting the chapter by hand
+
+Under the progress bar on the title page, **I'M UP TO CHAPTER** is a number field with a step down and a step up and a **Save** button, for catching up after reading elsewhere or undoing a mistaken "Mark as read".
+
+- **Saves only the chapter:** `PATCH /tracked-manga/{id}` with `{ "last_chapter_read": "650" }` (bare number, decimals allowed: "650.5"; a comma is accepted). Typing keeps digits, one dot or comma; anything else is dropped, and a value that is not a chapter number (or over 99999) disables Save and says so. Save is also disabled while the value equals what is saved.
+- **The chapter link:** when the chapter chosen is the latest one, the latest chapter's link is saved with it (`last_chapter_url`), as "Mark as read" does. For any other chapter the link is not sent, because the server cannot clear a saved link (a null means "not sent" for every field but the rating).
+- **Continue reading** opens the saved chapter link. Because that link can be left over from before a manual change, it is hidden when the link itself names a different chapter than the one you are on (`urlChapter`, e.g. `/chapter-188/`); links that carry an id instead of a number are trusted. **Open on <site>** opens the title's page on its source site and never changes progress.
+- **Immediate, and put back on failure,** like rating: the new chapter and progress bar show at once; if saving fails they go back with the usual message, and the number you typed stays in the field so Save can be pressed again. What is typed lives in the page (`draft`), and goes back to following the saved chapter after any successful save.
+
+## Previewing a title before tracking
+
+In Search, tapping a result that is not yet in the library opens a **preview sheet** (a bottom `Modal`) instead of doing nothing; a result already in the library still opens its page.
+
+- **Source:** `GET /manga/details?url=&source=` (`mangaApi.details`, 30 a minute; the server scrapes the site and saves nothing). The sheet shows at once what the search knew (cover, title, author, status), then the site's summary, genres and latest chapter with when it came out. The answer is kept for ten minutes (`useMangaPreview`) and is never retried behind the reader's back: a failure shows a message ("source site may be down", "too fast") with **Try again**.
+- **Sites:** a title found on several sites has a chip per site; the sheet starts on the site the results are filtered to, otherwise the first.
+- **Tracking from the sheet** (**Track this title**) uses the same `useTrackTitle` as the list, preferring the site being looked at. The tracking state is shared with the list, so afterwards the sheet shows **In your library**, which opens the title.
+- Nothing is requested until a result is tapped.
+
+## Exporting the library
+
+Settings → **YOUR DATA** has **Export library as CSV** and **as JSON**.
+
+- **No backend.** The file is built on the phone from the library already loaded (`["tracked"]`, so it works offline) in `src/utils/exportLibrary.ts`: title, author, reading status, rating, last chapter read, latest chapter, status, genres, alerts on/off, source, source link, date added; A to Z. No server ids and no summaries. The JSON also holds the app name, when it was exported and the count.
+- **CSV:** UTF-8 with a byte-order mark (so Excel shows accents), CRLF line ends, quoted where needed. Titles come from scraped sites, so a text cell starting with `=`, `+`, `-` or `@` gets a leading apostrophe and cannot run as a spreadsheet formula.
+- **Hand-over:** the text is written to `mangapulse-library.csv|json` in the app's private cache and `expo-sharing` opens the system share sheet (save to Files or Drive, mail, a spreadsheet app). The next export replaces the file, and signing out deletes both. An empty library says "Nothing to export" instead of sharing a blank file.

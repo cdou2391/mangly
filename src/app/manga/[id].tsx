@@ -5,12 +5,13 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as WebBrowser from "expo-web-browser";
 import { trackingApi } from "@/api/endpoints";
-import type { ReadingStatus, TrackedManga } from "@/api/types";
+import type { ReadingStatus, TrackedManga, TrackedMangaUpdate } from "@/api/types";
 import { BackBar } from "@/components/detail/BackBar";
 import { Cover } from "@/components/Cover";
+import { ProgressEditor } from "@/components/detail/ProgressEditor";
 import { RatingStars } from "@/components/detail/RatingStars";
 import { ErrorNote, Loading, Screen } from "@/components/ui";
-import { chapterToStore, parseChapter, readProgress, shortChapter } from "@/utils/chapters";
+import { chapterToStore, formatChapter, parseChapter, readProgress, shortChapter, urlChapter } from "@/utils/chapters";
 import { sourceName } from "@/utils/sources";
 import { palette } from "@/theme";
 
@@ -29,6 +30,8 @@ export default function MangaDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const trackingId = Number(id);
   const [expanded, setExpanded] = useState(false);
+  // What is typed in the "I'm up to chapter" field; null while it just follows the saved chapter.
+  const [draft, setDraft] = useState<string | null>(null);
 
   // The list endpoint already carries everything the detail view needs; no extra request.
   const q = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
@@ -38,6 +41,7 @@ export default function MangaDetail() {
   const update = useMutation({
     mutationFn: (body: Parameters<typeof trackingApi.update>[1]) => trackingApi.update(trackingId, body),
     onSuccess: async () => {
+      setDraft(null);
       await invalidate();
       void qc.invalidateQueries({ queryKey: ["recent-chapters"] });
     },
@@ -55,6 +59,25 @@ export default function MangaDetail() {
       if (context?.previous) qc.setQueryData(["tracked"], context.previous);
     },
     onSettled: () => invalidate(),
+  });
+  // Setting the chapter by hand shows at once and is put back if it cannot be saved. The link to the chapter is only
+  // sent when it is known (the latest one); the server cannot clear a saved link, so a stale one is checked on display.
+  const setProgress = useMutation<unknown, Error, TrackedMangaUpdate, { previous: TrackedManga[] | undefined }>({
+    mutationFn: (body) => trackingApi.update(trackingId, body),
+    onMutate: async (body) => {
+      await qc.cancelQueries({ queryKey: ["tracked"] });
+      const previous = qc.getQueryData<TrackedManga[]>(["tracked"]);
+      qc.setQueryData<TrackedManga[]>(["tracked"], (list) => list?.map((i) => (i.id === trackingId ? { ...i, ...body } as TrackedManga : i)));
+      return { previous };
+    },
+    onError: (_error, _body, context) => {
+      if (context?.previous) qc.setQueryData(["tracked"], context.previous);
+    },
+    onSuccess: () => setDraft(null),
+    onSettled: async () => {
+      await invalidate();
+      void qc.invalidateQueries({ queryKey: ["recent-chapters"] });
+    },
   });
   const remove = useMutation({
     mutationFn: () => trackingApi.remove(trackingId),
@@ -107,6 +130,15 @@ export default function MangaDetail() {
   const lr = parseChapter(item.last_chapter_read);
   const ll = parseChapter(m.latest_chapter);
   const behind = !!m.latest_chapter && (lr === null || ll === null ? m.latest_chapter !== item.last_chapter_read : ll > lr);
+  // The chapter link saved with the progress, unless it is plainly for another chapter than the one the reader is on.
+  const linkedChapter = urlChapter(item.last_chapter_url);
+  const continueUrl = item.last_chapter_url && (linkedChapter === null || lr === null || linkedChapter === lr) ? item.last_chapter_url : null;
+  const sourceUrl = item.preferred_source_record?.manga_details_url ?? null;
+  const saveProgress = (chapter: number) =>
+    setProgress.mutate({
+      last_chapter_read: formatChapter(chapter),
+      ...(ll !== null && chapter === ll && m.latest_chapter_url ? { last_chapter_url: m.latest_chapter_url } : {}),
+    });
   const longSummary = (m.summary?.length ?? 0) > 220;
 
   return (
@@ -143,6 +175,14 @@ export default function MangaDetail() {
               <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
             </View>
           ) : null}
+          <View style={styles.editor}>
+            <ProgressEditor saved={item.last_chapter_read} text={draft ?? (lr === null ? "" : formatChapter(lr))} onText={setDraft} busy={setProgress.isPending} onSave={saveProgress} />
+          </View>
+          {setProgress.isError ? (
+            <Text accessibilityLiveRegion="polite" style={[styles.error, { marginTop: 10 }]}>
+              {setProgress.error.message}
+            </Text>
+          ) : null}
         </View>
 
         {latestUrl ? (
@@ -167,6 +207,33 @@ export default function MangaDetail() {
             <Ionicons name="checkmark-done" size={19} color={palette.text} />
             <Text style={styles.secondaryText}>Mark {latest ?? "latest"} as read</Text>
           </Pressable>
+        ) : null}
+
+        {continueUrl || sourceUrl ? (
+          <View style={styles.links}>
+            {continueUrl ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Continue reading"
+                onPress={() => WebBrowser.openBrowserAsync(continueUrl)}
+                style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]}
+              >
+                <Ionicons name="play-outline" size={18} color={palette.text} />
+                <Text style={styles.linkText}>Continue reading</Text>
+              </Pressable>
+            ) : null}
+            {sourceUrl ? (
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={`Open on ${site ?? "the source site"}`}
+                onPress={() => WebBrowser.openBrowserAsync(sourceUrl)}
+                style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]}
+              >
+                <Ionicons name="open-outline" size={18} color={palette.text} />
+                <Text style={styles.linkText}>Open on {site ?? "the site"}</Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
 
         {m.summary ? (
@@ -275,6 +342,10 @@ const styles = StyleSheet.create({
   progressValue: { color: palette.text, fontSize: 17, fontWeight: "800", marginTop: 4 },
   track: { height: 5, borderRadius: 3, backgroundColor: "#262626", marginTop: 14, overflow: "hidden" },
   fill: { height: "100%", borderRadius: 3, backgroundColor: palette.primary },
+  editor: { marginTop: 18, paddingTop: 16, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.07)" },
+  links: { flexDirection: "row", gap: 10, marginTop: -8 },
+  link: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, height: 46, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: palette.card },
+  linkText: { color: palette.text, fontSize: 14, fontWeight: "700" },
   primary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, height: 52, borderRadius: 14, backgroundColor: palette.primary },
   primaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   secondary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, height: 50, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: palette.card, marginTop: -8 },

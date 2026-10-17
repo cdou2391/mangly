@@ -124,6 +124,22 @@ export interface SearchCandidate {
   source: string;
 }
 
+/** A title as its source site describes it right now (GET /manga/details). Nothing is saved on the server by asking. */
+export interface MangaDetail {
+  title: string;
+  url: string;
+  cover_url: string | null;
+  author: string | null;
+  status: string | null;
+  summary: string | null;
+  genres: string[];
+  alternative_titles: string[];
+  latest_chapter: string | null;
+  latest_chapter_url: string | null;
+  latest_chapter_at: string | null;
+  source: string;
+}
+
 export interface TrackFromSourceRequest {
   url: string;
   source: string;

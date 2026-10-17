@@ -3,6 +3,7 @@ import { tokenStore } from "@/auth/tokenStore";
 import type {
   AppNotification,
   HomePick,
+  MangaDetail,
   RecentChapter,
   RegisterRequest,
   SearchCandidate,
@@ -54,6 +55,8 @@ export const trackingApi = {
 export const mangaApi = {
   search: (q: string, source = "all") =>
     api.get<SearchCandidate[]>(`/manga/search?q=${encodeURIComponent(q)}&source=${encodeURIComponent(source)}`),
+  details: (url: string, source: string) =>
+    api.get<MangaDetail>(`/manga/details?url=${encodeURIComponent(url)}&source=${encodeURIComponent(source)}`),
   homePicks: (limit = 8) => api.get<HomePick[]>(`/manga/home-picks?limit=${limit}`),
 };
 

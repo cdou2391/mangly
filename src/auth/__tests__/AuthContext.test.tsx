@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ping, restoreSession } from "@/api/client";
 import type { RestoreOutcome } from "@/api/client";
 import { setOnline } from "@/api/reachability";
+import { clearExports } from "@/export/shareLibrary";
 import { clearSnapshot, loadSnapshot, MAX_AGE_MS, restoreInto, startPersisting, type Snapshot } from "@/cache/store";
 import { AuthProvider, RETRY_DELAYS_MS, STARTUP_WAIT_MS, useAuth } from "../AuthContext";
 
@@ -24,6 +25,7 @@ jest.mock("@/cache/store", () => ({
   startPersisting: jest.fn(() => ({ flush: jest.fn(), stop: jest.fn() })),
 }));
 jest.mock("@/api/endpoints", () => ({ authApi: { login: jest.fn(), logout: jest.fn(async () => {}) } }));
+jest.mock("@/export/shareLibrary", () => ({ clearExports: jest.fn() }));
 jest.mock("@/alerts", () => ({ stopAlerts: jest.fn(async () => {}) }));
 
 const restore = restoreSession as jest.Mock;
@@ -295,6 +297,7 @@ describe("with an offline copy", () => {
     await act(async () => listener(null));
     expect(client.getQueryData(["tracked"])).toBeUndefined();
     expect(clearSnapshot).toHaveBeenCalled();
+    expect(clearExports).toHaveBeenCalled(); // a shared copy of the library goes too
   });
 
   it("throws away another person's copy instead of showing it", async () => {

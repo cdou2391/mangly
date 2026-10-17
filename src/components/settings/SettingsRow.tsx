@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { palette } from "@/theme";
 
@@ -12,12 +12,18 @@ export function SettingsRow({
   onPress,
   last,
   warn,
+  action,
+  busy,
 }: {
   icon: IconName;
   label: string;
   value?: string;
   onPress?: () => void;
   last?: boolean;
+  /** The row does something in the app (shares a file) rather than opening a web page: drawn with a share arrow, announced as a button. */
+  action?: boolean;
+  /** The action is running: shows a spinner and ignores taps. */
+  busy?: boolean;
   /** Draw the value (and icon) in the alert colour, for a state that needs attention. */
   warn?: boolean;
 }) {
@@ -28,7 +34,7 @@ export function SettingsRow({
       </View>
       <Text style={styles.label}>{label}</Text>
       {value ? <Text style={[styles.value, warn && { color: palette.danger, fontWeight: "700" }]}>{value}</Text> : null}
-      {onPress ? <Ionicons name="open-outline" size={17} color={palette.faint} /> : null}
+      {busy ? <ActivityIndicator size="small" color={palette.muted} /> : onPress ? <Ionicons name={action ? "share-outline" : "open-outline"} size={17} color={palette.faint} /> : null}
     </>
   );
   const style = [styles.row, !last && styles.divider];
@@ -40,7 +46,13 @@ export function SettingsRow({
     );
   }
   return (
-    <Pressable accessibilityRole="link" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => [style, pressed && { backgroundColor: palette.raised }]}>
+    <Pressable
+      accessibilityRole={action ? "button" : "link"}
+      accessibilityLabel={label}
+      accessibilityState={action ? { busy: !!busy, disabled: !!busy } : undefined}
+      disabled={busy}
+      onPress={onPress}
+      style={({ pressed }) => [style, pressed && { backgroundColor: palette.raised }]}>
       {inner}
     </Pressable>
   );

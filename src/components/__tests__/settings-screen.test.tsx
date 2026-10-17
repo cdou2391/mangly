@@ -8,16 +8,19 @@ import { useAlertSetting } from "@/alerts";
 import { useAuth } from "@/auth/AuthContext";
 import { trackingApi } from "@/api/endpoints";
 import { setOnline } from "@/api/reachability";
+import { shareLibrary } from "@/export/shareLibrary";
 import type { ReadingStatus, TrackedManga, User } from "@/api/types";
 
 jest.mock("@/api/endpoints", () => ({ trackingApi: { list: jest.fn() } }));
 jest.mock("@/alerts", () => ({ useAlertSetting: jest.fn() }));
 jest.mock("@/auth/AuthContext", () => ({ useAuth: jest.fn() }));
 jest.mock("@/config", () => ({ WEB_URL: "https://web.test" }));
+jest.mock("@/export/shareLibrary", () => ({ shareLibrary: jest.fn(async () => {}) }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { version: "1.2.3" } } }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
 
 const list = trackingApi.list as jest.Mock;
+const share = shareLibrary as jest.Mock;
 const mockedUseAuth = useAuth as jest.Mock;
 const mockedAlerts = useAlertSetting as jest.Mock;
 let setAlerts: jest.Mock;
@@ -149,6 +152,73 @@ describe("notifications", () => {
   it("says they are checked in the background, so late arrival is expected", async () => {
     await renderSettings();
     expect(await screen.findByText(/Checked in the background/)).toBeTruthy();
+  });
+});
+
+describe("exporting the library", () => {
+  beforeEach(() => jest.spyOn(Alert, "alert").mockImplementation(() => {}));
+  afterEach(() => (Alert.alert as jest.Mock).mockRestore());
+
+  it("offers the library as CSV and as JSON", async () => {
+    await renderSettings();
+    expect(await screen.findByText("YOUR DATA")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Export library as CSV" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Export library as JSON" })).toBeTruthy();
+  });
+
+  it("shares the library it already has, in the format chosen", async () => {
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Export library as CSV" }));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    expect(share).toHaveBeenCalledWith("csv", expect.arrayContaining([expect.objectContaining({ id: 1 })]));
+    expect((share.mock.calls[0][1] as unknown[]).length).toBe(4);
+    await fireEvent.press(screen.getByRole("button", { name: "Export library as JSON" }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith("json", expect.any(Array)));
+  });
+
+  it("works offline, from the saved copy", async () => {
+    setOnline(false);
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Export library as JSON" }));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows it is busy, and ignores a second tap, while the share sheet is being prepared", async () => {
+    let finish!: () => void;
+    share.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
+    await renderSettings();
+    const csv = await screen.findByRole("button", { name: "Export library as CSV" });
+    await fireEvent.press(csv);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Export library as CSV" }).props.accessibilityState.busy).toBe(true));
+    await fireEvent.press(screen.getByRole("button", { name: "Export library as CSV" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Export library as JSON" }));
+    expect(share).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Export library as CSV" }).props.accessibilityState.busy).toBe(false));
+  });
+
+  it("says why it could not export", async () => {
+    share.mockRejectedValue(new Error("Sharing isn't available on this device."));
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Export library as CSV" }));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith("Couldn't export your library", "Sharing isn't available on this device."));
+    expect(screen.getByRole("button", { name: "Export library as CSV" }).props.accessibilityState.busy).toBe(false);
+  });
+
+  it("tells you when there is nothing to export, instead of sharing an empty file", async () => {
+    list.mockResolvedValue([]);
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Export library as CSV" }));
+    expect(Alert.alert).toHaveBeenCalledWith("Nothing to export", expect.stringContaining("empty"));
+    expect(share).not.toHaveBeenCalled();
+  });
+
+  it("cannot be tapped until the library has loaded", async () => {
+    list.mockReturnValue(new Promise(() => {}));
+    await renderSettings();
+    await screen.findByText("YOUR DATA");
+    expect(screen.queryByRole("button", { name: "Export library as CSV" })).toBeNull();
+    expect(screen.getByLabelText("Export library as CSV")).toBeTruthy();
   });
 });
 
