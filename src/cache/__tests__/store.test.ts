@@ -17,7 +17,8 @@ beforeEach(() => {
 afterEach(() => jest.useRealTimers());
 
 describe("what is kept", () => {
-  it("is the library, the latest chapters and the alerts, and nothing else", () => {
+  it("is what the Library shows: the library, the latest chapters, the alerts and the recommendations at the top, and nothing else", () => {
+    expect(isPersistedKey(["home-picks"])).toBe(true);
     expect(isPersistedKey(["tracked"])).toBe(true);
     expect(isPersistedKey(["recent-chapters"])).toBe(true);
     expect(isPersistedKey(["notifications"])).toBe(true);
@@ -83,6 +84,17 @@ describe("saving", () => {
     restoreInto(fresh, loaded);
     expect(fresh.getQueryData(["tracked"])).toEqual([{ id: 7 }]);
     persist.stop();
+  });
+
+  it("keeps the recommendations too, and brings them back after a restart, so the hero survives being offline", async () => {
+    const client = makeClient();
+    const persist = startPersisting(client, () => user, null);
+    await client.fetchQuery({ queryKey: ["home-picks"], queryFn: async () => [{ id: 7, title: "Berserk" }] });
+    jest.advanceTimersByTime(1100);
+    persist.stop();
+    const fresh = makeClient();
+    restoreInto(fresh, (await loadSnapshot())!);
+    expect(fresh.getQueryData(["home-picks"])).toEqual([{ id: 7, title: "Berserk" }]);
   });
 
   it("writes once for a burst of changes", async () => {

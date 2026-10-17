@@ -19,9 +19,33 @@ export function pickSubtitle(p: HomePick): string | null {
 }
 
 /**
+ * What the banner shows when there is nothing to recommend (everything has been followed, nothing could be loaded and
+ * nothing was saved): an invitation to search, so the top of the Library is never blank.
+ */
+function Fallback({ onSearch }: { onSearch: () => void }) {
+  return (
+    <View style={styles.wrap}>
+      <View style={[styles.page, styles.fallback]} accessible accessibilityLabel="Find your next read. Search for a title to follow.">
+        <LinearGradient pointerEvents="none" colors={["#3A0C0C", "#0B0B0B"]} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 1 }} style={StyleSheet.absoluteFill} />
+        <View style={styles.meta}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Find your next read</Text>
+            <Text style={styles.sub}>Search for a title and follow it to hear when a new chapter drops.</Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Search for a manga" onPress={onSearch} style={({ pressed }) => [styles.track, pressed && { opacity: 0.75 }]}>
+            <Text style={styles.trackText}>Search titles</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/**
  * The top of the Library: a full-width banner of recommended titles, one page per title, swiped sideways. Each page is the
  * cover edge to edge with the title inside it, a label (SIMILAR: like something in the library; POPULAR: followed by other
- * readers) and a Track button. Renders nothing without picks.
+ * readers) and a Track button. With nothing to recommend it shows an invitation to search instead, but only once the picks
+ * have settled (`settled`): while they are still being asked for it shows nothing, so a banner is not swapped for another.
  *
  * Deliberately a plain paging ScrollView (no snapping arithmetic, no virtualized list): there are at most a dozen pages, and
  * paging by exactly one screen width is what Android does most reliably. It is not virtualized, so Android cannot detach its
@@ -29,16 +53,21 @@ export function pickSubtitle(p: HomePick): string | null {
  */
 export function HeroPicks({
   picks,
+  settled,
   states,
   onFollow,
+  onSearch,
 }: {
   picks: HomePick[];
+  /** True once the picks have been answered (with titles, with none, or with an error) and not while they are loading. */
+  settled: boolean;
   states: Record<number, FollowState>;
   onFollow: (pick: HomePick) => void;
+  onSearch: () => void;
 }) {
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(0);
-  if (picks.length === 0) return null;
+  if (picks.length === 0) return settled ? <Fallback onSearch={onSearch} /> : null;
 
   // Follows the scroll itself (not only where a swipe comes to rest), so the dots are right however the page was reached.
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) =>
@@ -117,6 +146,7 @@ export function HeroPicks({
 const styles = StyleSheet.create({
   wrap: { marginBottom: 22 },
   page: { height: HEIGHT, backgroundColor: palette.raised },
+  fallback: { height: 220 },
   tag: { position: "absolute", top: 16, left: 20, backgroundColor: palette.primary, borderRadius: 6, paddingHorizontal: 9, paddingVertical: 4 },
   tagSimilar: { backgroundColor: "rgba(0,0,0,0.62)", borderWidth: 1, borderColor: palette.primary },
   tagText: { color: "#fff", fontSize: 10.5, fontWeight: "800", letterSpacing: 1 },

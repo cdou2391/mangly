@@ -1,5 +1,6 @@
 import { Dimensions, Platform, StyleSheet, ToastAndroid } from "react-native";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Library from "@/app/(tabs)/library";
@@ -69,14 +70,9 @@ describe("what a card says", () => {
 });
 
 describe("the hero", () => {
-  it("renders nothing without picks", async () => {
-    const { toJSON } = await render(<HeroPicks picks={[]} states={{}} onFollow={jest.fn()} />);
-    expect(toJSON()).toBeNull();
-  });
-
   it("shows each pick with its label, why, genres and a Track button, and reports the one tapped", async () => {
     const onFollow = jest.fn();
-    await render(<HeroPicks picks={[similar(7, "Berserk"), pick(8, "One Piece", { readers: 4 })]} states={{}} onFollow={onFollow} />);
+    await render(<HeroPicks picks={[similar(7, "Berserk"), pick(8, "One Piece", { readers: 4 })]} settled states={{}} onFollow={onFollow} onSearch={jest.fn()} />);
     expect(screen.getByText("SIMILAR")).toBeTruthy();
     expect(screen.getByText("POPULAR")).toBeTruthy();
     expect(screen.getByText("Because you read Chainsaw Man")).toBeTruthy();
@@ -88,17 +84,40 @@ describe("the hero", () => {
 
   it("disables a card while it is being added, and offers a retry after a failure", async () => {
     const picks = [pick(8, "One Piece")];
-    const { rerender } = await render(<HeroPicks picks={picks} states={{ 8: "adding" }} onFollow={jest.fn()} />);
+    const { rerender } = await render(<HeroPicks picks={picks} settled states={{ 8: "adding" }} onFollow={jest.fn()} onSearch={jest.fn()} />);
     expect(screen.getByRole("button", { name: "Track One Piece" }).props.accessibilityState).toMatchObject({ busy: true, disabled: true });
-    await rerender(<HeroPicks picks={picks} states={{ 8: "failed" }} onFollow={jest.fn()} />);
+    await rerender(<HeroPicks picks={picks} settled states={{ 8: "failed" }} onFollow={jest.fn()} onSearch={jest.fn()} />);
     expect(screen.getByText("Try again")).toBeTruthy();
   });
 
   it("has page dots only when there is more than one card", async () => {
-    const { rerender } = await render(<HeroPicks picks={[pick(8, "One")]} states={{}} onFollow={jest.fn()} />);
+    const { rerender } = await render(<HeroPicks picks={[pick(8, "One")]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
     expect(screen.queryByTestId("hero-dots", { includeHiddenElements: true })).toBeNull();
-    await rerender(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} states={{}} onFollow={jest.fn()} />);
+    await rerender(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
     expect(screen.getByTestId("hero-dots", { includeHiddenElements: true }).children).toHaveLength(2);
+  });
+});
+
+describe("when there is nothing to recommend", () => {
+  it("invites the reader to search, so the top of the Library is never blank", async () => {
+    const onSearch = jest.fn();
+    await render(<HeroPicks picks={[]} settled states={{}} onFollow={jest.fn()} onSearch={onSearch} />);
+    expect(screen.getByText("Find your next read")).toBeTruthy();
+    expect(screen.queryByText("SIMILAR")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Search for a manga" }));
+    expect(onSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows nothing at all while the picks are still being asked for, so one banner is not swapped for another", async () => {
+    const { toJSON } = await render(<HeroPicks picks={[]} settled={false} states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
+    expect(toJSON()).toBeNull();
+  });
+
+  it("is the same full-width banner, with no card around it", async () => {
+    await render(<HeroPicks picks={[]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
+    const flat = StyleSheet.flatten(screen.getByLabelText(/^Find your next read/).props.style);
+    expect(flat.borderRadius).toBeUndefined();
+    expect(flat.marginHorizontal).toBeUndefined();
   });
 });
 
@@ -108,7 +127,7 @@ describe("scrolling", () => {
     screen.getByTestId("hero-dots", { includeHiddenElements: true }).children.findIndex((c) => JSON.stringify((c as unknown as { props: { style: unknown } }).props.style).includes("18"));
 
   it("is a horizontal pager, one screen per title, that Android can hand the gesture to", async () => {
-    await render(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} states={{}} onFollow={jest.fn()} />);
+    await render(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
     const list = screen.getByTestId("hero-list");
     expect(list.props.horizontal).toBe(true);
     expect(list.props.pagingEnabled).toBe(true);
@@ -117,7 +136,7 @@ describe("scrolling", () => {
   });
 
   it("makes every page as wide as the screen, with no side margin, and puts the title inside it", async () => {
-    await render(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} states={{}} onFollow={jest.fn()} />);
+    await render(<HeroPicks picks={[pick(8, "One"), pick(9, "Two")]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
     const page = screen.getByLabelText(/^One\./);
     const flat = StyleSheet.flatten(page.props.style);
     expect(flat.width).toBe(Dimensions.get("window").width);
@@ -128,7 +147,7 @@ describe("scrolling", () => {
   });
 
   it("moves the page dot with the scroll position, however far a swipe went", async () => {
-    await render(<HeroPicks picks={[pick(1, "A"), pick(2, "B"), pick(3, "C")]} states={{}} onFollow={jest.fn()} />);
+    await render(<HeroPicks picks={[pick(1, "A"), pick(2, "B"), pick(3, "C")]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
     expect(activeDot()).toBe(0);
     const step = Dimensions.get("window").width;
     await scrollTo(step);
@@ -179,30 +198,58 @@ describe("in the Library", () => {
     expect(await screen.findByText("Berserk")).toBeTruthy();
   });
 
-  it("is simply absent when there is nothing to recommend", async () => {
+  it("shows the invitation to search when there is nothing to recommend", async () => {
     homePicks.mockResolvedValue([]);
     await renderLibrary();
-    await screen.findByText(/1 tracked/);
-    await waitFor(() => expect(homePicks).toHaveBeenCalled());
+    expect(await screen.findByText("Find your next read")).toBeTruthy();
     expect(screen.queryByText("SIMILAR")).toBeNull();
-    expect(screen.queryByText("POPULAR")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Search for a manga" }));
+    expect(router.navigate).toHaveBeenCalledWith("/search");
   });
 
-  it("is simply absent, with no error, when it cannot be loaded", async () => {
+  it("shows the invitation, with no error message, when the picks cannot be loaded and none were saved", async () => {
     homePicks.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
     await renderLibrary();
-    await screen.findByText(/1 tracked/);
-    await waitFor(() => expect(homePicks).toHaveBeenCalled());
-    expect(screen.queryByText("SIMILAR")).toBeNull();
+    expect(await screen.findByText("Find your next read")).toBeTruthy();
     expect(screen.queryByText(/Can't reach/)).toBeNull();
   });
 
-  it("is simply absent while the server is not ordering yet (404 before it is deployed)", async () => {
+  it("shows the invitation while the server does not have the endpoint yet (404)", async () => {
     homePicks.mockRejectedValue(new ApiError(404, "Not Found"));
     await renderLibrary();
-    await screen.findByText(/1 tracked/);
-    expect(screen.queryByText("SIMILAR")).toBeNull();
+    expect(await screen.findByText("Find your next read")).toBeTruthy();
     expect(screen.queryByText("Not Found")).toBeNull();
+  });
+
+  it("shows neither the hero nor the invitation while the picks are still loading", async () => {
+    homePicks.mockReturnValue(new Promise(() => {}));
+    await renderLibrary();
+    await screen.findByText(/1 tracked/);
+    expect(screen.queryByText("Find your next read")).toBeNull();
+    expect(screen.queryByText("SIMILAR")).toBeNull();
+  });
+
+  it("keeps showing the last picks, not the invitation, when a refresh cannot reach the server", async () => {
+    homePicks.mockRejectedValue(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    client.setQueryData(["home-picks"], [similar(7, "Berserk")], { updatedAt: 0 }); // what the offline copy brings back: old, so it is asked for again
+    await render(
+      <QueryClientProvider client={client}>
+        <SafeAreaProvider initialMetrics={metrics}>
+          <Library />
+        </SafeAreaProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(client.getQueryState(["home-picks"])?.status).toBe("error"));
+    await act(async () => {}); // let the screen react to the failed refresh
+    expect(screen.getByText("Berserk")).toBeTruthy();
+    expect(screen.queryByText("Find your next read")).toBeNull();
+  });
+
+  it("never shows the invitation next to real picks", async () => {
+    await renderLibrary();
+    await screen.findByText("Berserk");
+    expect(screen.queryByText("Find your next read")).toBeNull();
   });
 
   it("follows a pick by its id; it leaves the hero and the library is asked again", async () => {

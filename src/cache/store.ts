@@ -13,8 +13,11 @@ export const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CLOCK_SLACK_MS = 24 * 60 * 60 * 1000;
 const SAVE_DELAY_MS = 1_000;
 
-/** The query keys that make up the offline copy. Search results and anything else stay online-only. */
-const PERSISTED_KEYS = ["tracked", "recent-chapters", "notifications"];
+/**
+ * The query keys that make up the offline copy: what the Library shows. The recommendations at the top ("home-picks") are
+ * kept too, so the hero is still there when the server cannot be reached. Search results and anything else stay online-only.
+ */
+const PERSISTED_KEYS = ["tracked", "recent-chapters", "notifications", "home-picks"];
 export const isPersistedKey = (key: QueryKey) => PERSISTED_KEYS.includes(key[0] as string);
 
 export interface Snapshot {

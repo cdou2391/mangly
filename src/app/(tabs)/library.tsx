@@ -71,7 +71,7 @@ export default function Library() {
   const header = (
     <>
       <ScreenHeader title="Library" subtitle={subtitle} right={bell} />
-      <HeroPicks picks={picks.data ?? []} states={followStates} onFollow={follow} />
+      <HeroPicks picks={picks.data ?? []} settled={!picks.isPending} states={followStates} onFollow={follow} onSearch={() => router.navigate("/search")} />
       <NewRail chapters={fresh} caughtUp={caughtUp} onOpen={(c) => openChapter(fromRecent(c))} onSeeAll={() => router.navigate("/updates")} />
       {items && items.length > 0 ? <FilterChips value={filter} counts={counts} onChange={setFilter} /> : null}
     </>
