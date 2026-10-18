@@ -120,7 +120,7 @@ describe("filtering", () => {
 
   it("has an Unread filter with how many titles you are behind on, that narrows to them and toggles off", async () => {
     await renderLibrary();
-    await screen.findByText("Behind A");
+    await screen.findByRole("button", { name: /^Behind A\. Read/ });
     expect(screen.getByRole("button", { name: "Unread only, 2" })).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Unread only, 2" }));
     expect(shown().sort()).toEqual(["Behind A", "Behind D"]);
@@ -131,7 +131,7 @@ describe("filtering", () => {
 
   it("combines Unread with a status and with the search", async () => {
     await renderLibrary();
-    await screen.findByText("Behind A");
+    await screen.findByRole("button", { name: /^Behind A\. Read/ });
     await fireEvent.press(screen.getByRole("button", { name: "Unread only, 2" }));
     await fireEvent.press(screen.getByRole("button", { name: "Done, 2" }));
     expect(shown()).toEqual(["Behind D"]);
@@ -141,7 +141,7 @@ describe("filtering", () => {
 
   it("keeps the Unread filter on screen while it is on, even when nothing is unread any more, so it can be turned off", async () => {
     await renderLibrary();
-    await screen.findByText("Behind A");
+    await screen.findByRole("button", { name: /^Behind A\. Read/ });
     await fireEvent.press(screen.getByRole("button", { name: "Unread only, 2" }));
     list.mockResolvedValue([title("Behind A", { read: "9", latest: "9" }), title("Behind D", { read: "9", latest: "9" })]); // caught up
     await act(async () => screen.getByTestId("library-list").props.refreshControl.props.onRefresh());

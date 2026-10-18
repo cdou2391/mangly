@@ -7,7 +7,9 @@ import Library from "@/app/(tabs)/library";
 import { ApiError } from "@/api/client";
 import { mangaApi, notificationsApi, trackingApi } from "@/api/endpoints";
 import type { HomePick, TrackedManga } from "@/api/types";
+import * as WebBrowser from "expo-web-browser";
 import { HeroPicks, pickLabel, pickSubtitle } from "../HeroPicks";
+import type { ContinueCard } from "@/utils/continueReading";
 
 jest.mock("@/api/endpoints", () => ({
   trackingApi: { list: jest.fn(), recentChapters: jest.fn(), update: jest.fn(), track: jest.fn() },
@@ -282,5 +284,63 @@ describe("in the Library", () => {
     homePicks.mockClear();
     await act(async () => screen.getByTestId("library-list").props.refreshControl.props.onRefresh());
     expect(homePicks).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("continue reading", () => {
+  const card = (id: number, over: Partial<ContinueCard> = {}): ContinueCard => ({ trackingId: id, title: `Reading ${id}`, coverUrl: null, read: 23, next: 24, toGo: 22, url: "https://x.test/m/chapter-23/", ...over });
+
+  it("shows the title being read with the chapter to read next, before the recommendations", async () => {
+    const onResume = jest.fn();
+    await render(<HeroPicks picks={[pick(8, "One Piece")]} resume={[card(1)]} onResume={onResume} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
+    expect(screen.getByText("CONTINUE")).toBeTruthy();
+    expect(screen.getByText("Next up: Ch. 24")).toBeTruthy();
+    expect(screen.getByText("You're on Ch. 23 · 22 chapters to go")).toBeTruthy();
+    const order = screen.getAllByText(/^(CONTINUE|POPULAR)$/).map((n) => n.props.children);
+    expect(order).toEqual(["CONTINUE", "POPULAR"]);
+    await fireEvent.press(screen.getByRole("button", { name: "Continue Reading 1" }));
+    expect(onResume).toHaveBeenCalledWith(expect.objectContaining({ trackingId: 1 }));
+  });
+
+  it("counts them in the dots and the scroll limit", async () => {
+    await render(<HeroPicks picks={[pick(8, "One")]} resume={[card(1), card(2)]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
+    expect(screen.getByTestId("hero-dots", { includeHiddenElements: true }).children).toHaveLength(3);
+  });
+
+  it("is shown on its own when there is nothing to recommend, with no invitation to search", async () => {
+    await render(<HeroPicks picks={[]} resume={[card(1)]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
+    expect(screen.getByText("CONTINUE")).toBeTruthy();
+    expect(screen.queryByText("Find your next read")).toBeNull();
+  });
+
+  it("says Open, not Continue, when it has no chapter page to open", async () => {
+    await render(<HeroPicks picks={[]} resume={[card(1, { url: null })]} settled states={{}} onFollow={jest.fn()} onSearch={jest.fn()} />);
+    expect(screen.getByText("Open")).toBeTruthy();
+  });
+
+  describe("in the Library", () => {
+    const reading = (id: number, over: Partial<TrackedManga> = {}) => ({ ...mine(id), last_chapter_read: "23", manga: { ...mine(id).manga, latest_chapter: "45" }, ...over });
+
+    it("opens the page of the last chapter read, and leaves the progress alone", async () => {
+      list.mockResolvedValue([reading(1, { last_chapter_url: "https://x.test/m/chapter-23/" })]);
+      await renderLibrary();
+      await fireEvent.press(await screen.findByRole("button", { name: "Continue Mine 1" }));
+      expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/m/chapter-23/", expect.anything());
+      expect(trackingApi.update).not.toHaveBeenCalled();
+    });
+
+    it("opens the title when there is no link to open", async () => {
+      list.mockResolvedValue([reading(1)]);
+      await renderLibrary();
+      await fireEvent.press(await screen.findByRole("button", { name: "Continue Mine 1" }));
+      expect(WebBrowser.openBrowserAsync).not.toHaveBeenCalled();
+      expect(router.push).toHaveBeenCalledWith({ pathname: "/manga/[id]", params: { id: "1" } });
+    });
+
+    it("offers nothing to continue when the reader is caught up", async () => {
+      await renderLibrary(); // mine(): read 1 of 1
+      await screen.findByText("Berserk");
+      expect(screen.queryByText("CONTINUE")).toBeNull();
+    });
   });
 });

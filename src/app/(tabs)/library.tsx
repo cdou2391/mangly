@@ -17,11 +17,13 @@ import { Pager } from "@/components/library/Pager";
 import { countByFilter, type LibraryFilter } from "@/utils/library";
 import { applyView, hasUnread, isNarrowed, paginate, type LibraryView } from "@/utils/libraryView";
 import { FILTERS } from "@/utils/library";
+import { openInBrowser } from "@/utils/browser";
 import { useOpenChapter } from "@/hooks/useOpenChapter";
 import { useFollowPick, useHomePicks } from "@/hooks/useHomePicks";
 import { useSortPreference } from "@/hooks/useSortPreference";
 import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
 import { useWarmBrowser } from "@/hooks/useWarmBrowser";
+import { continueCards, type ContinueCard } from "@/utils/continueReading";
 import { fromRecent } from "@/utils/feed";
 import { palette } from "@/theme";
 
@@ -43,6 +45,15 @@ export default function Library() {
   const items = tracked.data;
   const picks = useHomePicks();
   const { states: followStates, follow } = useFollowPick();
+  const resume = useMemo(() => continueCards(items ?? []), [items]);
+  // Opens the page of the last chapter read (its "next" button goes on from there); progress changes only when the reader marks a chapter read.
+  const resumeReading = useCallback(
+    (card: ContinueCard) => {
+      if (card.url) void openInBrowser(card.url);
+      else router.push({ pathname: "/manga/[id]", params: { id: String(card.trackingId) } });
+    },
+    [],
+  );
   const counts = useMemo(() => countByFilter(items ?? []), [items]);
   const behindCount = useMemo(() => (items ?? []).filter(hasUnread).length, [items]);
   // Search, filters and sorting run on the library already on the phone: instant, and the same offline. The list is shown a page at a time.
@@ -104,7 +115,7 @@ export default function Library() {
   const header = (
     <>
       <ScreenHeader title="Library" subtitle={subtitle} right={bell} />
-      <HeroPicks picks={picks.data ?? []} settled={!picks.isPending} states={followStates} onFollow={follow} onSearch={() => router.navigate("/search")} />
+      <HeroPicks picks={picks.data ?? []} settled={!picks.isPending} states={followStates} onFollow={follow} onSearch={() => router.navigate("/search")} resume={resume} onResume={resumeReading} />
       <MoodEntry onOpen={() => router.push("/mood")} />
       <NewRail chapters={fresh} caughtUp={caughtUp} onOpen={(c) => openChapter(fromRecent(c))} onSeeAll={() => router.navigate("/updates")} />
       {items && items.length > 0 ? (

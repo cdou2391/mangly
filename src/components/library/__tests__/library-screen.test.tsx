@@ -422,7 +422,7 @@ describe("the way into Pick by mood", () => {
 
   it("is not offered to an account without the feature", async () => {
     await renderLibrary();
-    await screen.findByText("Chainsaw Man");
+    await screen.findByRole("button", { name: /^Chainsaw Man\. Read/ });
     expect(screen.queryByRole("button", { name: /^Pick by mood/ })).toBeNull();
   });
 

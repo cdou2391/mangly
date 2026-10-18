@@ -12,7 +12,8 @@ import { RatingStars } from "@/components/detail/RatingStars";
 import { useWarmBrowser } from "@/hooks/useWarmBrowser";
 import { ErrorNote, Loading, Screen } from "@/components/ui";
 import { isWebLink, openInBrowser } from "@/utils/browser";
-import { chapterToStore, formatChapter, parseChapter, readProgress, shortChapter, urlChapter } from "@/utils/chapters";
+import { chapterToStore, formatChapter, parseChapter, readProgress, shortChapter } from "@/utils/chapters";
+import { savedChapterUrl } from "@/utils/continueReading";
 import { sourceName } from "@/utils/sources";
 import { palette } from "@/theme";
 
@@ -136,8 +137,7 @@ export default function MangaDetail() {
   const ll = parseChapter(m.latest_chapter);
   const behind = !!m.latest_chapter && (lr === null || ll === null ? m.latest_chapter !== item.last_chapter_read : ll > lr);
   // The chapter link saved with the progress, unless it is plainly for another chapter than the one the reader is on.
-  const linkedChapter = urlChapter(item.last_chapter_url);
-  const continueUrl = item.last_chapter_url && (linkedChapter === null || lr === null || linkedChapter === lr) ? item.last_chapter_url : null;
+  const continueUrl = savedChapterUrl(item);
   const sourceUrl = item.preferred_source_record?.manga_details_url ?? null;
   const saveProgress = (chapter: number) =>
     setProgress.mutate({

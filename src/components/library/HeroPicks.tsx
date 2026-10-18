@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWi
 import { LinearGradient } from "expo-linear-gradient";
 import type { HomePick } from "@/api/types";
 import { Cover } from "@/components/Cover";
+import { nextLine, toGoLine, type ContinueCard } from "@/utils/continueReading";
 import type { FollowState } from "@/hooks/useHomePicks";
 import { palette } from "@/theme";
 
@@ -43,8 +44,8 @@ function Fallback({ onSearch }: { onSearch: () => void }) {
 
 /**
  * The top of the Library: a full-width banner of recommended titles, one page per title, swiped sideways. Each page is the
- * cover edge to edge with the title inside it, a label (SIMILAR: like something in the library; POPULAR: followed by other
- * readers) and a Track button. With nothing to recommend it shows an invitation to search instead, but only once the picks
+ * cover edge to edge with the title inside it, a label (CONTINUE: a title being read, with the chapter to read next, shown
+ * first; SIMILAR: like something in the library; POPULAR: followed by other readers) and a Track button (Continue on the first). With nothing to recommend it shows an invitation to search instead, but only once the picks
  * have settled (`settled`): while they are still being asked for it shows nothing, so a banner is not swapped for another.
  *
  * Deliberately a plain paging ScrollView (no snapping arithmetic, no virtualized list): there are at most a dozen pages, and
@@ -57,6 +58,8 @@ export function HeroPicks({
   states,
   onFollow,
   onSearch,
+  resume = [],
+  onResume,
 }: {
   picks: HomePick[];
   /** True once the picks have been answered (with titles, with none, or with an error) and not while they are loading. */
@@ -64,14 +67,18 @@ export function HeroPicks({
   states: Record<number, FollowState>;
   onFollow: (pick: HomePick) => void;
   onSearch: () => void;
+  /** Titles being read, with the chapter to read next; shown before the recommendations. */
+  resume?: ContinueCard[];
+  onResume?: (card: ContinueCard) => void;
 }) {
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(0);
-  if (picks.length === 0) return settled ? <Fallback onSearch={onSearch} /> : null;
+  const pages = resume.length + picks.length;
+  if (pages === 0) return settled ? <Fallback onSearch={onSearch} /> : null;
 
   // Follows the scroll itself (not only where a swipe comes to rest), so the dots are right however the page was reached.
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) =>
-    setIndex(Math.max(0, Math.min(picks.length - 1, Math.round(e.nativeEvent.contentOffset.x / width))));
+    setIndex(Math.max(0, Math.min(pages - 1, Math.round(e.nativeEvent.contentOffset.x / width))));
 
   return (
     <View style={styles.wrap}>
@@ -86,6 +93,37 @@ export function HeroPicks({
         onScroll={onScroll}
         scrollEventThrottle={32}
       >
+        {resume.map((card) => (
+          <View key={`resume-${card.trackingId}`} style={[styles.page, { width }]} accessible accessibilityLabel={[card.title, "continue reading", nextLine(card), toGoLine(card)].join(". ")}>
+            <Cover uri={card.coverUrl} style={StyleSheet.absoluteFill} />
+            <LinearGradient pointerEvents="none" colors={["rgba(0,0,0,0.05)", "rgba(0,0,0,0.92)"]} locations={[0.3, 1]} style={StyleSheet.absoluteFill} />
+            <View style={[styles.tag, styles.tagSimilar]}>
+              <Text style={styles.tagText}>CONTINUE</Text>
+            </View>
+            <View style={styles.meta}>
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={2} style={styles.title}>
+                  {card.title}
+                </Text>
+                <Text numberOfLines={1} style={styles.sub}>
+                  {nextLine(card)}
+                </Text>
+                <Text numberOfLines={1} style={styles.genres}>
+                  {toGoLine(card)}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Continue ${card.title}`}
+                accessibilityHint={card.url ? "Opens the last chapter you read" : "Opens the title"}
+                onPress={() => onResume?.(card)}
+                style={({ pressed }) => [styles.track, pressed && { opacity: 0.75 }]}
+              >
+                <Text style={styles.trackText}>{card.url ? "Continue" : "Open"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
         {picks.map((item) => {
           const state = states[item.id];
           const sub = pickSubtitle(item);
@@ -132,10 +170,10 @@ export function HeroPicks({
           );
         })}
       </ScrollView>
-      {picks.length > 1 ? (
+      {pages > 1 ? (
         <View testID="hero-dots" style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          {picks.map((p, i) => (
-            <View key={p.id} style={[styles.dot, i === Math.min(index, picks.length - 1) && styles.dotOn]} />
+          {Array.from({ length: pages }, (_, i) => (
+            <View key={i} style={[styles.dot, i === Math.min(index, pages - 1) && styles.dotOn]} />
           ))}
         </View>
       ) : null}
