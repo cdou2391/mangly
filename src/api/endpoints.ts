@@ -4,6 +4,8 @@ import type {
   AppNotification,
   HomePick,
   MangaDetail,
+  MoodRequest,
+  MoodResult,
   RecentChapter,
   RegisterRequest,
   SearchCandidate,
@@ -67,4 +69,11 @@ export const notificationsApi = {
   markRead: (id: number) => api.patch<AppNotification>(`/notifications/${id}/read`),
   markAllRead: () => api.patch<unknown>("/notifications/read-all"),
   clearRead: () => api.delete<unknown>("/notifications/read"),
+};
+
+/** Asking an AI takes far longer than anything else the app asks the server for. */
+export const MOOD_TIMEOUT_MS = 60_000;
+
+export const recommendationsApi = {
+  byMood: (body: MoodRequest) => api.post<MoodResult>("/recommendations/by-mood", body, { timeoutMs: MOOD_TIMEOUT_MS }),
 };

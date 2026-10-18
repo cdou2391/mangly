@@ -1,4 +1,4 @@
-import { mangaApi, trackingApi } from "../endpoints";
+import { MOOD_TIMEOUT_MS, mangaApi, recommendationsApi, trackingApi } from "../endpoints";
 
 jest.mock("expo-secure-store", () => require("@/test-utils/mocks").secureStoreMock());
 
@@ -39,3 +39,43 @@ describe("previewing a title", () => {
     expect(call().init.method ?? "GET").toBe("GET");
   });
 });
+
+describe("mood picks", () => {
+  it("posts the mood and the note to the mood endpoint", async () => {
+    fetchMock.mockResolvedValue(json({ mood: "happy", mood_analysis: "x", recommendations: [], generated_by: "anthropic" }));
+    const result = await recommendationsApi.byMood({ mood: "happy", context: "something short" });
+    expect(call().url).toMatch(/\/recommendations\/by-mood$/);
+    expect(call().init.method).toBe("POST");
+    expect(JSON.parse(call().init.body as string)).toEqual({ mood: "happy", context: "something short" });
+    expect(result.mood).toBe("happy");
+  });
+
+  it("leaves the note out when there is none", async () => {
+    fetchMock.mockResolvedValue(json({}));
+    await recommendationsApi.byMood({ mood: "epic" });
+    expect(JSON.parse(call().init.body as string)).toEqual({ mood: "epic" });
+  });
+
+  it("allows a minute for the AI to answer", () => {
+    expect(MOOD_TIMEOUT_MS).toBe(60_000);
+  });
+
+  it("really waits longer than an ordinary request would", async () => {
+    jest.useFakeTimers();
+    try {
+      fetchMock.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((resolve, reject) => {
+            init.signal!.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+            setTimeout(() => resolve(json({ mood: "happy", mood_analysis: "x", recommendations: [], generated_by: "anthropic" })), 30_000);
+          }),
+      );
+      const done = recommendationsApi.byMood({ mood: "happy" });
+      await jest.advanceTimersByTimeAsync(30_000);
+      await expect(done).resolves.toMatchObject({ mood: "happy" });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+

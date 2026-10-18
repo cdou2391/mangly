@@ -7,7 +7,7 @@ import type { RestoreOutcome } from "@/api/client";
 import { setOnline } from "@/api/reachability";
 import { clearExports } from "@/export/shareLibrary";
 import { clearSnapshot, loadSnapshot, MAX_AGE_MS, restoreInto, startPersisting, type Snapshot } from "@/cache/store";
-import { AuthProvider, RETRY_DELAYS_MS, STARTUP_WAIT_MS, useAuth } from "../AuthContext";
+import { AuthProvider, RETRY_DELAYS_MS, STARTUP_WAIT_MS, useAuth, useFeature } from "../AuthContext";
 
 type Listener = (pair: { user: { id: number; full_name: string } } | null) => void;
 let listener: Listener = () => {};
@@ -424,7 +424,7 @@ describe("changing the password", () => {
       listener({ user: { ...ada, email: "ada@example.com" } as never });
       return "ok" as const;
     });
-    render(
+    await render(
       <QueryClientProvider client={client}>
         <AuthProvider>
           <Grab />
@@ -463,7 +463,7 @@ describe("changing the password", () => {
       listener({ user: ada as never }); // a user without an email
       return "ok" as const;
     });
-    render(
+    await render(
       <QueryClientProvider client={client}>
         <AuthProvider>
           <Grab />
@@ -488,3 +488,55 @@ describe("changing the password", () => {
     expect(apiLogout).toHaveBeenCalled();
   });
 });
+
+describe("useFeature", () => {
+  function Flag({ name }: { name: string }) {
+    return <Text testID="flag">{String(useFeature(name))}</Text>;
+  }
+  const flag = () => screen.getByTestId("flag").props.children as string;
+  const signedInWith = async (features: string[]) => {
+    restore.mockImplementation(async () => {
+      listener({ user: { ...ada, features } as never });
+      return "ok" as const;
+    });
+    await render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <Flag name="mood_recommendations" />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await wait(0);
+    await wait(0);
+  };
+
+  it("is true when the signed-in account has the feature", async () => {
+    await signedInWith(["mood_recommendations", "other"]);
+    expect(flag()).toBe("true");
+  });
+
+  it("is false when it does not, and for a feature that merely contains the name", async () => {
+    await signedInWith(["other"]);
+    expect(flag()).toBe("false");
+  });
+
+  it("is false while nobody is signed in", async () => {
+    restore.mockImplementation(answers("none"));
+    await render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <Flag name="mood_recommendations" />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await wait(0);
+    expect(flag()).toBe("false");
+  });
+
+  it("is false outside the provider instead of throwing, so a screen can be shown on its own", async () => {
+    await render(<Flag name="mood_recommendations" />);
+    await wait(0);
+    expect(flag()).toBe("false");
+  });
+});
+

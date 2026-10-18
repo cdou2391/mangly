@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Keyboard, StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { mangaApi, trackingApi } from "@/api/endpoints";
 import { describeError } from "@/api/errors";
@@ -22,6 +22,16 @@ export default function Search() {
   const [query, setQuery] = useState("");
   const [source, setSource] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
+
+  // Other screens can send the reader here with a title already searched for (`q`; `t` lets the same title be sent again).
+  const { q: presetQuery, t: presetStamp } = useLocalSearchParams<{ q?: string; t?: string }>();
+  useEffect(() => {
+    const preset = presetQuery?.trim().replace(/\s+/g, " ");
+    if (!preset || preset.length < MIN_QUERY) return;
+    setText(preset);
+    setSource(null);
+    setQuery(preset);
+  }, [presetQuery, presetStamp]);
 
   const tracked = useQuery({ queryKey: ["tracked"], queryFn: trackingApi.list });
   // Searching can scrape the source sites and the server allows 20 searches a minute, so results are kept for a while and a failed

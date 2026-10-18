@@ -11,6 +11,7 @@ import { FilterChips } from "@/components/library/FilterChips";
 import { LibraryRow } from "@/components/library/LibraryRow";
 import { NewRail } from "@/components/library/NewRail";
 import { HeroPicks } from "@/components/library/HeroPicks";
+import { MoodEntry } from "@/components/mood/MoodEntry";
 import { LibraryControls } from "@/components/library/LibraryControls";
 import { Pager } from "@/components/library/Pager";
 import { countByFilter, type LibraryFilter } from "@/utils/library";
@@ -104,6 +105,7 @@ export default function Library() {
     <>
       <ScreenHeader title="Library" subtitle={subtitle} right={bell} />
       <HeroPicks picks={picks.data ?? []} settled={!picks.isPending} states={followStates} onFollow={follow} onSearch={() => router.navigate("/search")} />
+      <MoodEntry onOpen={() => router.push("/mood")} />
       <NewRail chapters={fresh} caughtUp={caughtUp} onOpen={(c) => openChapter(fromRecent(c))} onSeeAll={() => router.navigate("/updates")} />
       {items && items.length > 0 ? (
         <View onLayout={(e) => (controlsY.current = e.nativeEvent.layout.y)}>

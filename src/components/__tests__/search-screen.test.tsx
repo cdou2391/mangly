@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import Search from "@/app/(tabs)/search";
 import { ApiError } from "@/api/client";
 import { mangaApi, trackingApi } from "@/api/endpoints";
@@ -12,7 +12,7 @@ jest.mock("@/api/endpoints", () => ({
   mangaApi: { search: jest.fn(), details: jest.fn() },
   trackingApi: { list: jest.fn(), fromSource: jest.fn() },
 }));
-jest.mock("expo-router", () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
+jest.mock("expo-router", () => ({ router: { push: jest.fn(), navigate: jest.fn() }, useLocalSearchParams: jest.fn(() => ({})) }));
 
 const search = mangaApi.search as jest.Mock;
 const details = mangaApi.details as jest.Mock;
@@ -447,3 +447,85 @@ describe("previewing a title", () => {
     expect(router.push).toHaveBeenCalledWith({ pathname: "/manga/[id]", params: { id: "33" } });
   });
 });
+
+describe("being sent here with a title to look for", () => {
+  const sentWith = (params: Record<string, string>) => (useLocalSearchParams as jest.Mock).mockReturnValue(params);
+  afterEach(() => (useLocalSearchParams as jest.Mock).mockReturnValue({}));
+
+  it("fills the search box and looks for it at once", async () => {
+    sentWith({ q: "Dragon Ball", t: "1" });
+    await renderSearch();
+    await waitFor(() => expect(search).toHaveBeenCalledWith("Dragon Ball"));
+    expect(box().props.value).toBe("Dragon Ball");
+    expect(await screen.findByText("3 titles for “Dragon Ball”")).toBeTruthy();
+  });
+
+  it("tidies the words like a typed search", async () => {
+    sentWith({ q: "  dragon    ball " });
+    await renderSearch();
+    await waitFor(() => expect(search).toHaveBeenCalledWith("dragon ball"));
+  });
+
+  it("does nothing for a title too short to search", async () => {
+    sentWith({ q: "a" });
+    await renderSearch();
+    await act(async () => {});
+    expect(search).not.toHaveBeenCalled();
+    expect(screen.getByText("Find your next read")).toBeTruthy();
+  });
+
+  it("does nothing when it was not sent anywhere", async () => {
+    await renderSearch();
+    await act(async () => {});
+    expect(search).not.toHaveBeenCalled();
+    expect(box().props.value).toBe("");
+  });
+
+  it("looks again for a new title when sent here again", async () => {
+    sentWith({ q: "Dragon Ball", t: "1" });
+    const view = await renderSearch();
+    await screen.findByText("3 titles for “Dragon Ball”");
+    sentWith({ q: "Dungeon Meshi", t: "2" });
+    search.mockResolvedValue([cand("Dungeon Meshi", "mangaread"), cand("Dungeon Meshi", "weebcentral")]);
+    await view.rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } })}>
+        <SafeAreaProvider initialMetrics={metrics}>
+          <Search />
+        </SafeAreaProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(search).toHaveBeenCalledWith("Dungeon Meshi"));
+    expect(box().props.value).toBe("Dungeon Meshi");
+  });
+
+  const again = (view: Awaited<ReturnType<typeof renderSearch>>) =>
+    view.rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } })}>
+        <SafeAreaProvider initialMetrics={metrics}>
+          <Search />
+        </SafeAreaProvider>
+      </QueryClientProvider>,
+    );
+
+  it("clears a site filter, so the next title is looked for everywhere", async () => {
+    sentWith({ q: "Dragon Ball", t: "1" });
+    const view = await renderSearch();
+    await screen.findByText("3 titles for “Dragon Ball”");
+    await fireEvent.press(screen.getByRole("button", { name: "WeebCentral" }));
+    expect(screen.getByText("2 titles for “Dragon Ball”")).toBeTruthy();
+    sentWith({ q: "Dragon Quest", t: "2" });
+    await again(view);
+    expect(await screen.findByText("3 titles for “Dragon Quest”")).toBeTruthy();
+  });
+
+  it("puts the title back in the box when the same one is sent again after the box was changed", async () => {
+    sentWith({ q: "Dragon Ball", t: "1" });
+    const view = await renderSearch();
+    await screen.findByText("3 titles for “Dragon Ball”");
+    await fireEvent.changeText(box(), "something else");
+    sentWith({ q: "Dragon Ball", t: "2" });
+    await again(view);
+    await waitFor(() => expect(box().props.value).toBe("Dragon Ball"));
+  });
+});
+

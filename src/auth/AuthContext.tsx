@@ -233,3 +233,9 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 }
+
+/** Whether the signed-in account has a feature switched on. False when nobody is signed in (or outside the provider). */
+export function useFeature(name: string): boolean {
+  const ctx = useContext(AuthContext);
+  return ctx?.state.status === "signedIn" && ctx.state.user.features.includes(name);
+}

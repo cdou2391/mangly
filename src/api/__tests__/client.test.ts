@@ -274,3 +274,56 @@ describe("reachability", () => {
     expect(isOnline()).toBe(false);
   });
 });
+
+describe("how long a request may take", () => {
+  const slow = (answersAfterMs: number) =>
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((resolve, reject) => {
+          init.signal!.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+          setTimeout(() => resolve(json(200, { ok: true })), answersAfterMs);
+        }),
+    );
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it("gives up on an ordinary request after 20 seconds", async () => {
+    slow(30_000);
+    const settled = api.post("/x", {}).catch((e) => e);
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(await settled).toMatchObject({ status: 0, message: UNREACHABLE_MESSAGE });
+  });
+
+  it("waits as long as the caller asked for, which an AI answer needs", async () => {
+    slow(30_000);
+    const done = api.post("/x", {}, { timeoutMs: 60_000 });
+    await jest.advanceTimersByTimeAsync(30_000);
+    await expect(done).resolves.toEqual({ ok: true });
+  });
+
+  it("still gives up at that longer time", async () => {
+    slow(90_000);
+    const settled = api.post("/x", {}, { timeoutMs: 60_000 }).catch((e) => e);
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(await settled).toMatchObject({ status: 0 });
+  });
+
+  it("keeps the longer time when the request is sent again after the session was renewed", async () => {
+    setAccessToken("old");
+    await applySession(pair(1));
+    let calls = 0;
+    fetchMock.mockImplementation((url: string, init: RequestInit) => {
+      if (url.endsWith("/auth/mobile/refresh")) return Promise.resolve(json(200, pair(2)));
+      calls += 1;
+      if (calls === 1) return Promise.resolve(json(401, { detail: "expired" }));
+      return new Promise((resolve, reject) => {
+        init.signal!.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+        setTimeout(() => resolve(json(200, { ok: true })), 40_000);
+      });
+    });
+    const done = api.post("/x", {}, { timeoutMs: 60_000 });
+    await jest.advanceTimersByTimeAsync(40_000);
+    await expect(done).resolves.toEqual({ ok: true });
+  });
+});
+

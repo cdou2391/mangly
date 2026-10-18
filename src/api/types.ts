@@ -168,3 +168,41 @@ export interface RegisterRequest {
   email: string;
   password: string;
 }
+
+/** The account feature that turns mood recommendations on (set by an administrator). */
+export const MOOD_FEATURE = "mood_recommendations";
+
+export const MOODS = [
+  { key: "happy", label: "Happy", emoji: "😊" },
+  { key: "sad", label: "Emotional", emoji: "😢" },
+  { key: "adventurous", label: "Adventurous", emoji: "⚡" },
+  { key: "relaxed", label: "Relaxed", emoji: "😌" },
+  { key: "romantic", label: "Romantic", emoji: "💕" },
+  { key: "intense", label: "Intense", emoji: "🔥" },
+  { key: "epic", label: "Epic", emoji: "🌌" },
+  { key: "thriller", label: "Thriller", emoji: "😱" },
+] as const;
+export type MoodKey = (typeof MOODS)[number]["key"];
+
+export interface MoodPick {
+  title: string;
+  genres: string[];
+  reason: string;
+  mood_match: "high" | "medium" | "low";
+  /** The title is already in the reader's library; `manga_id` is then its manga id. */
+  from_your_library: boolean;
+  manga_id: number | null;
+}
+
+/** The answer of POST /recommendations/by-mood. One request costs one of the reader's daily AI requests. */
+export interface MoodResult {
+  mood: string;
+  mood_analysis: string;
+  recommendations: MoodPick[];
+  generated_by: string;
+}
+
+export interface MoodRequest {
+  mood: MoodKey;
+  context?: string;
+}

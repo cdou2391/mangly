@@ -49,3 +49,24 @@ describe("describeError when changing the password", () => {
     expect(describeError(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."), "password")).toMatch(/Can't reach/);
   });
 });
+
+describe("describeError when asking for mood picks", () => {
+  it("keeps the daily limit message, which says when it resets", () => {
+    const message = "Daily AI limit of 5 reached. It resets at 00:00 UTC.";
+    expect(describeError(new ApiError(429, message), "mood")).toBe(message);
+  });
+  it("words any other 429 as going too fast", () => {
+    expect(describeError(new ApiError(429, "Rate limit exceeded: 5 per 1 minute"), "mood")).toMatch(/too fast/);
+  });
+  it("does not show a server error's internals, and says what to do", () => {
+    expect(describeError(new ApiError(503, "AI recommendations are not enabled on this server."), "mood")).toMatch(/AI service may be unavailable/);
+    expect(describeError(new ApiError(500, "Traceback ..."), "mood")).not.toMatch(/Traceback/);
+  });
+  it("keeps the server's words when the feature is not enabled for the account", () => {
+    expect(describeError(new ApiError(403, "Mood recommendations are not enabled for your account."), "mood")).toBe("Mood recommendations are not enabled for your account.");
+  });
+  it("keeps the offline wording", () => {
+    expect(describeError(new ApiError(0, "Can't reach MangaPulse. Check your connection and try again later."), "mood")).toMatch(/Can't reach/);
+  });
+});
+

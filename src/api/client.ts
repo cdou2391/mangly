@@ -149,13 +149,13 @@ async function toError(res: Response): Promise<ApiError> {
 export async function request<T>(
   path: string,
   init: RequestInit = {},
-  opts: { auth?: boolean } = {},
+  opts: { auth?: boolean; timeoutMs?: number } = {},
 ): Promise<T> {
   const auth = opts.auth ?? true;
-  let res = await rawFetch(path, init, auth);
+  let res = await rawFetch(path, init, auth, opts.timeoutMs);
   if (res.status === 401 && auth) {
     const outcome = await restoreSession();
-    if (outcome === "ok") res = await rawFetch(path, init, auth);
+    if (outcome === "ok") res = await rawFetch(path, init, auth, opts.timeoutMs);
     // The token was not refused, the server just could not be asked: that is a connection problem, not a "401".
     else if (outcome === "unreachable") throw new ApiError(0, UNREACHABLE_MESSAGE);
   }
@@ -166,7 +166,7 @@ export async function request<T>(
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body?: unknown, opts?: { auth?: boolean }) =>
+  post: <T>(path: string, body?: unknown, opts?: { auth?: boolean; timeoutMs?: number }) =>
     request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }, opts),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PATCH", body: body === undefined ? undefined : JSON.stringify(body) }),

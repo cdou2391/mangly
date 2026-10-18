@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { BROWSER_OPTIONS } from "@/utils/browser";
 import Library from "@/app/(tabs)/library";
+import { useFeature } from "@/auth/AuthContext";
 import { notificationsApi, trackingApi } from "@/api/endpoints";
 import type { AppNotification, RecentChapter, TrackedManga } from "@/api/types";
 
@@ -15,6 +16,7 @@ jest.mock("@/api/endpoints", () => ({
   notificationsApi: { list: jest.fn(), markRead: jest.fn() },
 }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn(), navigate: jest.fn() } }));
+jest.mock("@/auth/AuthContext", () => ({ useFeature: jest.fn(() => false) }));
 jest.mock("expo-web-browser", () => ({ openBrowserAsync: jest.fn(async () => ({})) }));
 
 const list = trackingApi.list as jest.Mock;
@@ -409,3 +411,34 @@ describe("marking a chapter as read from NEW FOR YOU", () => {
     });
   });
 });
+
+describe("the way into Pick by mood", () => {
+  beforeEach(() => {
+    list.mockResolvedValue(SAMPLE);
+    recentChapters.mockResolvedValue([]);
+    listAlerts.mockResolvedValue([]);
+  });
+  afterEach(() => (useFeature as jest.Mock).mockReturnValue(false));
+
+  it("is not offered to an account without the feature", async () => {
+    await renderLibrary();
+    await screen.findByText("Chainsaw Man");
+    expect(screen.queryByRole("button", { name: /^Pick by mood/ })).toBeNull();
+  });
+
+  it("is offered under the recommendations to an account with it, and opens the mood screen", async () => {
+    (useFeature as jest.Mock).mockReturnValue(true);
+    await renderLibrary();
+    await fireEvent.press(await screen.findByRole("button", { name: /^Pick by mood/ }));
+    expect(router.push).toHaveBeenCalledWith("/mood");
+    expect(useFeature).toHaveBeenCalledWith("mood_recommendations");
+  });
+
+  it("is there even when the library is empty, where a way to find something to read matters most", async () => {
+    (useFeature as jest.Mock).mockReturnValue(true);
+    list.mockResolvedValue([]);
+    await renderLibrary();
+    expect(await screen.findByRole("button", { name: /^Pick by mood/ })).toBeTruthy();
+  });
+});
+

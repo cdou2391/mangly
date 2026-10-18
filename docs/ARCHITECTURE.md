@@ -19,6 +19,7 @@ src/
     (tabs)/       library, updates (alerts + new chapters), search, settings
     manga/[id]    title detail
     change-password, stats   pushed from Settings
+    mood             pushed from the Library (accounts with the mood feature)
   api/            fetch client, endpoint functions, response types
   auth/           token storage, AuthProvider
   alerts/         new-chapter notifications: background check, permission, Settings switch
@@ -224,4 +225,15 @@ Every link out of the app (chapters, a title's page on its source site, the web 
 - **Warm-up:** the Library, Updates and title screens call `useWarmBrowser`, which starts the browser (`warmUpAsync`) and, on the title page, tells it the latest chapter's link is likely next (`mayInitWithUrlAsync`), so the page opens faster. It is only a hint: it never throws and never delays opening a link.
 
 A real in-app reader (a WebView with the app's own header, or chapter images drawn natively) is deliberately not built; see the discussion of trade-offs (bot checks on the source sites in a WebView, ad handling, security of loading untrusted pages in the app, and the legal side of serving chapter images).
+
+## Pick by mood
+
+A screen of its own (`src/app/mood.tsx`), not part of the Library list: it is an interactive flow (choose, wait for an AI, read the answers) that spends a limited daily allowance, so it is something the reader goes to on purpose rather than something that loads with the home screen. The Library has a small **Pick by mood** row under the recommendations (`MoodEntry`) that opens it.
+
+- **Only for accounts that have it.** The server answers `POST /recommendations/by-mood` with 403 unless the account has the `mood_recommendations` feature (set by an administrator; it arrives in `user.features`). `useFeature` hides the Library row without it, and the screen itself says "not enabled" if reached anyway.
+- **Choose and ask.** Eight moods (happy, emotional, adventurous, relaxed, romantic, intense, epic, thriller; the server's list) and an optional note of up to 200 characters. One request returns five titles, each with genres, a reason and "Great / Good / Mild match", plus a short reading of the mood.
+- **A limited daily allowance.** The server gives each account a fixed number of AI requests per UTC day, shared with the other AI features (the web app's Judge my taste and Similar manga), and gives one back when a request fails. The app cannot read how many are left (no endpoint), so it says so in words and, at the limit, shows the server's own message ("Daily AI limit of 5 reached. It resets at 00:00 UTC."). Nothing is retried automatically (`retry: false`) and the button is locked while a request is out, so one tap is one request.
+- **Slow on purpose.** AI answers take far longer than anything else, so this one request waits up to 60 seconds (`timeoutMs` on `api.post`; everything else keeps 20) and the screen says "This can take up to a minute."
+- **The last answer is kept** for the session (`mood-result` in the query cache, in memory only, not in the offline copy), so leaving and returning shows the picks and the mood again without spending another request. A failed request leaves the previous picks on screen. Signing out clears it.
+- **From a pick to your library.** The AI names titles; it does not know which sites have them. **Find & track** sends the reader to the Search tab with the title already searched for (`/search?q=…`, with a timestamp `t` so the same title can be sent twice), where the normal flow (preview, Track from the site that has it) applies. A pick the server says is already in the library (`from_your_library`) shows **In your library · Open** and opens that title.
 
