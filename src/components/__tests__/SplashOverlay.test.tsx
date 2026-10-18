@@ -1,4 +1,4 @@
-import { AccessibilityInfo, Animated, StyleSheet } from "react-native";
+import { AccessibilityInfo, Animated, Dimensions, StyleSheet } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { SplashOverlay } from "../SplashOverlay";
@@ -159,3 +159,76 @@ describe("the logo", () => {
     loopSpy.mockRestore();
   });
 });
+
+describe("the name", () => {
+  const style = (testID: string) => StyleSheet.flatten(screen.getByTestId(testID, { hidden: true }).props.style);
+  const window = () => Dimensions.get("window");
+  /** Where the M itself starts: the picture of the mark has empty space above the M (74 of its 640 pixels). */
+  const mTop = () => {
+    const logo = style("splash-logo");
+    return window().height / 2 - logo.height / 2 + logo.height * (74 / 640);
+  };
+  const withScreen = (width: number, height: number) =>
+    jest.spyOn(Dimensions, "get").mockReturnValue({ width, height, scale: 2, fontScale: 1 });
+  afterEach(() => jest.restoreAllMocks());
+
+  it("is the stylised MangaPulse wordmark, called MangaPulse for a screen reader", async () => {
+    await render(<SplashOverlay appReady={false} />);
+    const name = screen.getByTestId("splash-wordmark", { hidden: true });
+    expect(name.props.accessibilityLabel).toBe("MangaPulse");
+    expect(name.props.source).not.toBe(screen.getByTestId("splash-logo", { hidden: true }).props.source); // its own picture, not the mark
+  });
+
+  it("sits above the M, close to it, and does not cover it", async () => {
+    await render(<SplashOverlay appReady={false} />);
+    const name = style("splash-wordmark");
+    const bottom = name.top + name.height;
+    expect(bottom).toBeLessThanOrEqual(mTop());
+    expect(mTop() - bottom).toBeLessThan(30); // near the M, not floating at the top of the screen
+  });
+
+  it("is centred across the screen and keeps the shape of the picture", async () => {
+    await render(<SplashOverlay appReady={false} />);
+    const name = style("splash-wordmark");
+    expect(name.left + name.width / 2).toBeCloseTo(window().width / 2, 1);
+    expect(name.width / name.height).toBeCloseTo(1000 / 306, 2);
+  });
+
+  it("is no wider than 78% of the screen or 340 points", async () => {
+    await render(<SplashOverlay appReady={false} />);
+    expect(style("splash-wordmark").width).toBeLessThanOrEqual(Math.min(window().width * 0.78, 340));
+    expect(style("splash-wordmark").width).toBeGreaterThan(300); // and still big enough to read
+  });
+
+  it.each([
+    [360, 640],
+    [412, 915],
+    [320, 568],
+    [800, 1280],
+  ])("stays fully on a %d by %d screen", async (width, height) => {
+    withScreen(width, height);
+    await render(<SplashOverlay appReady={false} />);
+    const name = style("splash-wordmark");
+    expect(name.top).toBeGreaterThanOrEqual(0);
+    expect(name.left).toBeGreaterThanOrEqual(0);
+    expect(name.left + name.width).toBeLessThanOrEqual(width);
+    expect(name.top + name.height).toBeLessThanOrEqual(mTop());
+  });
+
+  it("does not beat with the M: it stays the same size", async () => {
+    await render(<SplashOverlay appReady={false} />);
+    expect(style("splash-wordmark").transform).toBeUndefined();
+    const before = style("splash-wordmark").width;
+    await advance(400);
+    expect(style("splash-wordmark").width).toBe(before);
+  });
+
+  it("goes with the splash when it fades away", async () => {
+    await render(<SplashOverlay appReady />);
+    expect(screen.getByTestId("splash-wordmark", { hidden: true })).toBeTruthy();
+    await advance(1400);
+    await advance(1000);
+    expect(screen.queryByTestId("splash-wordmark", { hidden: true })).toBeNull();
+  });
+});
+

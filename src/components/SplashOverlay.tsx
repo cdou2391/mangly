@@ -8,6 +8,13 @@ import { StatusBar } from "expo-status-bar";
 // here instead: the native splash stays up (plain dark) until this image has loaded, then hands over.
 const ART = require("../../assets/splash-art.jpg");
 const MARK = require("../../assets/logo-mark.png");
+const WORDMARK = require("../../assets/logo-wordmark.png");
+
+/** The wordmark picture is 1000 by 306. */
+const WORDMARK_RATIO = 1000 / 306;
+/** The mark's picture has empty space above the M (74 of its 640 pixels), so the name is placed against the M, not the picture. */
+const MARK_TOP_INSET = 74 / 640;
+const NAME_GAP = 12; // between the name and the top of the M
 
 const MIN_VISIBLE_MS = 1400; // long enough to register the artwork, short enough not to feel slow
 const FADE_MS = 450;
@@ -23,6 +30,10 @@ const BEAT_MS = 1500; // one "lub-dub" plus a short rest, repeated while the app
 function HeartbeatLogo() {
   const { width, height } = useWindowDimensions();
   const size = Math.min(width * 0.82, height * 0.5, 380);
+  // The name sits above the M, centred, and never wider than the screen allows.
+  const nameWidth = Math.min(width * 0.78, 340);
+  const nameHeight = nameWidth / WORDMARK_RATIO;
+  const nameTop = height / 2 - size / 2 + size * MARK_TOP_INSET - nameHeight - NAME_GAP;
   const scale = useRef(new Animated.Value(1)).current;
   const ripple1 = useRef(new Animated.Value(0)).current;
   const ripple2 = useRef(new Animated.Value(0)).current;
@@ -85,6 +96,13 @@ function HeartbeatLogo() {
       <Animated.View testID="splash-beat" style={{ transform: [{ scale }] }}>
         <Image source={MARK} testID="splash-logo" style={{ width: size, height: size }} contentFit="contain" />
       </Animated.View>
+      <Image
+        source={WORDMARK}
+        testID="splash-wordmark"
+        accessibilityLabel="MangaPulse"
+        style={{ position: "absolute", top: nameTop, left: (width - nameWidth) / 2, width: nameWidth, height: nameHeight }}
+        contentFit="contain"
+      />
     </View>
   );
 }
