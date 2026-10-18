@@ -65,6 +65,9 @@ export interface MangaSourceRecord {
   latest_chapter: string | null;
   latest_chapter_url: string | null;
   latest_chapter_at: string | null;
+  /** The oldest chapter the site lists. Missing until the server has looked it up (and from an older server). */
+  first_chapter?: string | null;
+  first_chapter_url?: string | null;
   last_scraped_at: string | null;
 }
 

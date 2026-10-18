@@ -1,6 +1,6 @@
 import * as WebBrowser from "expo-web-browser";
 import { palette } from "@/theme";
-import { BROWSER_OPTIONS, openInBrowser, warmUpBrowser } from "../browser";
+import { BROWSER_OPTIONS, isWebLink, openInBrowser, warmUpBrowser } from "../browser";
 
 jest.mock("expo-web-browser", () => ({
   openBrowserAsync: jest.fn(async () => ({ type: "cancel" })),
@@ -66,3 +66,13 @@ describe("getting the browser ready", () => {
     expect(mayInit).not.toHaveBeenCalled();
   });
 });
+
+describe("isWebLink", () => {
+  it.each(["https://x.test/a", "http://x.test/a", "HTTPS://X.TEST/A"])("accepts %s", (url) => {
+    expect(isWebLink(url)).toBe(true);
+  });
+  it.each([null, undefined, "", "javascript:alert(1)", "intent://x#Intent;end", "file:///etc/passwd", "mangly://x", "//x.test/a", "x.test/a", " https://x.test"])("refuses %p", (url) => {
+    expect(isWebLink(url)).toBe(false);
+  });
+});
+

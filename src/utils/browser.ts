@@ -16,6 +16,9 @@ export const BROWSER_OPTIONS: WebBrowser.WebBrowserOpenOptions = {
   enableBarCollapsing: true,
 };
 
+/** Whether a link is one the browser should be asked to open: a web address, nothing else (no app or file links). */
+export const isWebLink = (url: string | null | undefined): url is string => !!url && /^https?:\/\//i.test(url);
+
 export const openInBrowser = (url: string) => WebBrowser.openBrowserAsync(url, BROWSER_OPTIONS);
 
 /**

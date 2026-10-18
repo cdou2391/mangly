@@ -11,7 +11,7 @@ import { ProgressEditor } from "@/components/detail/ProgressEditor";
 import { RatingStars } from "@/components/detail/RatingStars";
 import { useWarmBrowser } from "@/hooks/useWarmBrowser";
 import { ErrorNote, Loading, Screen } from "@/components/ui";
-import { openInBrowser } from "@/utils/browser";
+import { isWebLink, openInBrowser } from "@/utils/browser";
 import { chapterToStore, formatChapter, parseChapter, readProgress, shortChapter, urlChapter } from "@/utils/chapters";
 import { sourceName } from "@/utils/sources";
 import { palette } from "@/theme";
@@ -124,6 +124,8 @@ export default function MangaDetail() {
 
   const m = item.manga;
   const latestUrl = item.preferred_source_record?.latest_chapter_url ?? m.latest_chapter_url;
+  // The first chapter's link is kept by the server (null until it has looked it up); opening it never changes your progress.
+  const firstUrl = isWebLink(item.preferred_source_record?.first_chapter_url) ? item.preferred_source_record!.first_chapter_url! : null;
   const status = item.user_status_override ?? m.global_status;
   const site = item.preferred_source_record ? sourceName(item.preferred_source_record.source) : null;
   const read = shortChapter(item.last_chapter_read);
@@ -188,16 +190,31 @@ export default function MangaDetail() {
           ) : null}
         </View>
 
-        {latestUrl ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Read latest chapter"
-            onPress={() => openInBrowser(latestUrl)}
-            style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
-          >
-            <Ionicons name="book-outline" size={19} color="#fff" />
-            <Text style={styles.primaryText}>Read latest chapter</Text>
-          </Pressable>
+        {latestUrl || firstUrl ? (
+          <View style={styles.readRow}>
+            {firstUrl ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Read first chapter"
+                onPress={() => openInBrowser(firstUrl)}
+                style={({ pressed }) => [latestUrl ? styles.readFirst : styles.primary, !latestUrl && { flex: 1 }, pressed && { opacity: 0.85 }]}
+              >
+                <Ionicons name="play-skip-back-outline" size={19} color={latestUrl ? palette.text : "#fff"} />
+                <Text style={latestUrl ? styles.readFirstText : styles.primaryText}>{latestUrl ? "First chapter" : "Read first chapter"}</Text>
+              </Pressable>
+            ) : null}
+            {latestUrl ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Read latest chapter"
+                onPress={() => openInBrowser(latestUrl)}
+                style={({ pressed }) => [styles.primary, { flex: firstUrl ? 1.25 : 1 }, pressed && { opacity: 0.85 }]}
+              >
+                <Ionicons name="book-outline" size={19} color="#fff" />
+                <Text style={styles.primaryText}>{firstUrl ? "Latest chapter" : "Read latest chapter"}</Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
         {behind ? (
           <Pressable
@@ -349,6 +366,9 @@ const styles = StyleSheet.create({
   links: { flexDirection: "row", gap: 10, marginTop: -8 },
   link: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, height: 46, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: palette.card },
   linkText: { color: palette.text, fontSize: 14, fontWeight: "700" },
+  readRow: { flexDirection: "row", gap: 10 },
+  readFirst: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 52, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: palette.card },
+  readFirstText: { color: palette.text, fontSize: 15, fontWeight: "800" },
   primary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, height: 52, borderRadius: 14, backgroundColor: palette.primary },
   primaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   secondary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, height: 50, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: palette.card, marginTop: -8 },

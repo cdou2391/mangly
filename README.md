@@ -20,7 +20,7 @@ The app is shown to users as **MangaPulse** (the code lives in the `mangly` repo
 | Area | State |
 |---|---|
 | Sign in / register / sign out | Implemented. Backend merged in MangaPulse PR #20; **must be deployed** for sign-in to work |
-| Library (search, filters, sorting, pages of ten), title detail, status, rating and progress edits (set the chapter by hand, continue reading) | Implemented (existing API; search and paging run on the phone) |
+| Library (search, filters, sorting, pages of ten), title detail, status, rating, progress edits (set the chapter by hand, continue reading) and Read first chapter (needs MangaPulse `feat/first-chapter`; the button appears once a title has its first-chapter link) | Implemented (existing API; search and paging run on the phone) |
 | Updates feed (alerts and new chapters in one list), search with a preview before tracking | Implemented (existing API) |
 | Export the library as CSV or JSON, reading stats, clear read alerts | Implemented (built on the phone; clearing uses `DELETE /notifications/read`) |
 | Change password in the app | Implemented (existing `POST /auth/change-password`; this device is signed in again, other devices are signed out) |

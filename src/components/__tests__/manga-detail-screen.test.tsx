@@ -129,6 +129,83 @@ describe("getting the browser ready", () => {
   });
 });
 
+describe("reading from the start", () => {
+  const FIRST = "https://x.test/naruto/chapter-1/";
+  const withFirst = (first: string | null | undefined, record: Record<string, unknown> = {}, manga: Partial<TrackedManga["manga"]> = {}) => {
+    const base = item({}, manga);
+    list.mockResolvedValue([{ ...base, preferred_source_record: { ...base.preferred_source_record!, ...(first === undefined ? {} : { first_chapter: "Chapter 1", first_chapter_url: first }), ...record } }]);
+  };
+
+  it("offers the first chapter beside the latest one, and opens it", async () => {
+    withFirst(FIRST);
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Read first chapter" }));
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledTimes(1);
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(FIRST, BROWSER_OPTIONS);
+    expect(screen.getByRole("button", { name: "Read latest chapter" })).toBeTruthy();
+  });
+
+  it("does not touch your reading progress", async () => {
+    withFirst(FIRST);
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Read first chapter" }));
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("keeps opening the latest chapter from its own button", async () => {
+    withFirst(FIRST);
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Read latest chapter" }));
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith("https://x.test/latest", BROWSER_OPTIONS);
+  });
+
+  it("shortens the two labels so they fit side by side, and keeps the full ones for a screen reader", async () => {
+    withFirst(FIRST);
+    await renderDetail();
+    await screen.findByRole("button", { name: "Read first chapter" });
+    expect(screen.getByText("First chapter")).toBeTruthy();
+    expect(screen.getByText("Latest chapter")).toBeTruthy();
+    expect(screen.queryByText("Read latest chapter")).toBeNull();
+  });
+
+  it("shows only the latest chapter, with its full label, until the server has the first chapter's link", async () => {
+    withFirst(null);
+    await renderDetail();
+    expect(await screen.findByText("Read latest chapter")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Read first chapter" })).toBeNull();
+  });
+
+  it("shows nothing extra for a title from a server that does not send it yet", async () => {
+    withFirst(undefined);
+    await renderDetail();
+    await screen.findByText("Read latest chapter");
+    expect(screen.queryByRole("button", { name: "Read first chapter" })).toBeNull();
+  });
+
+  it("shows nothing extra for a title with no source record", async () => {
+    list.mockResolvedValue([item({ preferred_source_record: null })]);
+    await renderDetail();
+    await screen.findByText("Naruto");
+    expect(screen.queryByRole("button", { name: "Read first chapter" })).toBeNull();
+  });
+
+  it.each(["javascript:alert(1)", "intent://x#Intent;end", "file:///etc/passwd", "mangly://x", "//x.test/a", ""])("never opens a link that is not a web address (%s)", async (bad) => {
+    withFirst(bad);
+    await renderDetail();
+    await screen.findByText("Read latest chapter");
+    expect(screen.queryByRole("button", { name: "Read first chapter" })).toBeNull();
+  });
+
+  it("is the one big button when there is no latest chapter link", async () => {
+    withFirst(FIRST, { latest_chapter_url: null }, { latest_chapter_url: null });
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Read first chapter" }));
+    expect(screen.getByText("Read first chapter")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Read latest chapter" })).toBeNull();
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(FIRST, BROWSER_OPTIONS);
+  });
+});
+
 describe("reading", () => {
   it("opens the latest chapter", async () => {
     await renderDetail();

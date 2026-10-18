@@ -237,3 +237,11 @@ A screen of its own (`src/app/mood.tsx`), not part of the Library list: it is an
 - **The last answer is kept** for the session (`mood-result` in the query cache, in memory only, not in the offline copy), so leaving and returning shows the picks and the mood again without spending another request. A failed request leaves the previous picks on screen. Signing out clears it.
 - **From a pick to your library.** The AI names titles; it does not know which sites have them. **Find & track** sends the reader to the Search tab with the title already searched for (`/search?q=…`, with a timestamp `t` so the same title can be sent twice), where the normal flow (preview, Track from the site that has it) applies. A pick the server says is already in the library (`from_your_library`) shows **In your library · Open** and opens that title.
 
+## Reading from the first chapter
+
+The title page has **First chapter** beside **Latest chapter** (both read **Read first chapter** / **Read latest chapter** to a screen reader). First chapter opens the oldest chapter the source site lists, in the same browser tab as every other chapter, and never changes your reading progress (opening chapter 1 is not the same as having read it).
+
+- **Where the link comes from.** MangaPulse keeps it with the title's source record (`preferred_source_record.first_chapter` and `first_chapter_url`), filled when the title is first tracked and by a one-off `backfill-first-chapters` command for titles tracked before. The app only reads it; it is never worked out on the phone (WeebCentral's chapter links are ids, and MangaRead's often carry a title, so a link cannot be guessed from the latest one).
+- **Never a broken button.** With no link yet (a title not backfilled, or a server without the change) the button is simply not there and the title page looks as before. Only `http(s)` links are ever opened. With no latest-chapter link either, the first-chapter button takes the whole row.
+- **Offline.** The link is part of the offline copy of the library, so the button shows offline; opening it needs a connection like any chapter.
+
