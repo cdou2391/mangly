@@ -368,6 +368,12 @@ describe("the notification status", () => {
     expect(screen.getByRole("button", { name: "Send a test notification" }).props.accessibilityState.busy).toBe(false);
   });
 
+  it("opens the list of recent alerts", async () => {
+    await renderSettings();
+    await fireEvent.press(await screen.findByRole("button", { name: "Recent alerts" }));
+    expect(router.push).toHaveBeenCalledWith("/alert-history");
+  });
+
   it("explains why alerts can be late, with a way to the app's battery settings", async () => {
     const open = jest.spyOn(Linking, "openSettings").mockResolvedValue(undefined);
     await renderSettings();

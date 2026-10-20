@@ -1,4 +1,5 @@
 import { attachUser, isOn, markSeen, resume, sendTestNotification, stopAlerts, turnOff, turnOn } from "../control";
+import { appendHistory, readHistory } from "../history";
 import { dismissAll, hasPermission, requestPermission, show } from "../notify";
 import { registerAlertsTask, unregisterAlertsTask } from "../registration";
 import { EMPTY, readState, writeState } from "../state";
@@ -121,6 +122,12 @@ describe("stopAlerts (sign-out)", () => {
     expect(unregisterAlertsTask).toHaveBeenCalled();
     expect(await readState()).toEqual({ ...EMPTY, enabled: null, userId: null, seenId: null });
     expect(dismissAll).toHaveBeenCalled();
+  });
+
+  it("forgets the alert history too, so the next account does not see this one's", async () => {
+    await appendHistory([{ id: 1, title: "A", chapter: "1", found: 1, sent: 2 }]);
+    await stopAlerts();
+    expect(await readHistory()).toEqual([]);
   });
 
   it("still forgets everything if cancelling the check fails", async () => {

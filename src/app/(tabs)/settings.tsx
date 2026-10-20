@@ -152,6 +152,7 @@ export default function Settings() {
               <>
                 <SettingsRow icon="time-outline" label="Last check" value={checkLine.value} warn={checkLine.warn} />
                 <SettingsRow icon="speedometer-outline" label="Alert delay" value={delay ? formatDelay(delay.minutes) : "Not enough alerts yet"} />
+                <SettingsRow icon="list-outline" label="Recent alerts" navigates onPress={() => router.push("/alert-history")} />
                 <SettingsRow icon="paper-plane-outline" label="Send a test notification" action trailing="notifications-outline" busy={testing} onPress={() => void sendTest()} />
                 <SettingsRow icon="help-circle-outline" label="Alerts arriving late?" navigates onPress={() => explainDelays(delay?.samples ?? null)} last />
               </>

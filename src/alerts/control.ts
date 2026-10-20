@@ -1,5 +1,6 @@
 import { OPEN_UPDATES, dismissAll, hasPermission, requestPermission, show } from "./notify";
 import { registerAlertsTask, unregisterAlertsTask } from "./registration";
+import { clearHistory } from "./history";
 import { clearState, EMPTY, patchState, readState, type AlertsState } from "./state";
 
 /**
@@ -63,5 +64,6 @@ export async function sendTestNotification(): Promise<"sent" | "no-permission"> 
 export async function stopAlerts(): Promise<void> {
   await unregisterAlertsTask().catch(() => {});
   await clearState();
+  await clearHistory();
   await dismissAll();
 }

@@ -1,5 +1,5 @@
 import { EMPTY, type AlertsState, type CheckOutcome } from "../state";
-import { STALE_AFTER_MS, ago, formatDelay, lastCheckLine, typicalDelay } from "../status";
+import { STALE_AFTER_MS, ago, formatDelay, formatWhen, lastCheckLine, lateBy, typicalDelay } from "../status";
 
 const MIN = 60_000;
 const NOW = Date.parse("2026-10-17T12:00:00Z");
@@ -96,5 +96,32 @@ describe("formatDelay", () => {
     [75 * 60, "About 3 d"],
   ])("%d minutes is '%s'", (m, text) => {
     expect(formatDelay(m)).toBe(text);
+  });
+});
+
+describe("formatWhen", () => {
+  const now = new Date(2026, 9, 20, 15, 0).getTime(); // Oct 20, 15:00 local time
+  const at = (m: number, d: number, h: number, min: number) => new Date(2026, m, d, h, min).getTime();
+  it("says Today and Yesterday with the clock time", () => {
+    expect(formatWhen(at(9, 20, 14, 2), now)).toBe("Today 14:02");
+    expect(formatWhen(at(9, 20, 0, 5), now)).toBe("Today 00:05");
+    expect(formatWhen(at(9, 19, 23, 59), now)).toBe("Yesterday 23:59");
+  });
+  it("gives the date for anything older", () => {
+    expect(formatWhen(at(9, 18, 9, 10), now)).toBe("Oct 18 · 09:10");
+    expect(formatWhen(at(0, 3, 18, 30), now)).toBe("Jan 3 · 18:30");
+  });
+});
+
+describe("lateBy", () => {
+  it("measures from when the chapter was found to when the notification was shown", () => {
+    expect(lateBy(0, 20_000)).toBe("Under a minute later");
+    expect(lateBy(0, 35 * MIN)).toBe("35 min later");
+    expect(lateBy(0, 60 * MIN)).toBe("1 h later");
+    expect(lateBy(0, 80 * MIN)).toBe("1 h 20 min later");
+    expect(lateBy(0, 3 * 24 * 60 * MIN)).toBe("3 d later");
+  });
+  it("is never negative, if the phone's clock is behind the server's", () => {
+    expect(lateBy(10 * MIN, 0)).toBe("Under a minute later");
   });
 });

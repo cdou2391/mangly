@@ -61,3 +61,29 @@ export function formatDelay(minutes: number): string {
   }
   return `About ${Math.round(minutes / (24 * 60))} d`;
 }
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const clock = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+/** A moment as the reader's clock shows it: "Today 14:02", "Yesterday 09:10", "Oct 18 · 09:10". */
+export function formatWhen(at: number, now: number): string {
+  const d = new Date(at);
+  const days = Math.round((dayStart(new Date(now)) - dayStart(d)) / (24 * 60 * MIN));
+  if (days === 0) return `Today ${clock(d)}`;
+  if (days === 1) return `Yesterday ${clock(d)}`;
+  return `${MONTHS[d.getMonth()]} ${d.getDate()} · ${clock(d)}`;
+}
+
+/** How long after MangaPulse found a chapter the phone showed it: "Under a minute later", "35 min later", "1 h 20 min later". */
+export function lateBy(found: number, sent: number): string {
+  const minutes = Math.round((sent - found) / MIN); // below 1 when the phone's clock is behind too
+  if (minutes < 1) return "Under a minute later";
+  if (minutes < 60) return `${minutes} min later`;
+  if (minutes < 48 * 60) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m === 0 ? `${h} h later` : `${h} h ${m} min later`;
+  }
+  return `${Math.round(minutes / (24 * 60))} d later`;
+}

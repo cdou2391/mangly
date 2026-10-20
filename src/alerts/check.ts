@@ -1,6 +1,7 @@
 import { AppState } from "react-native";
 import { notificationsApi } from "@/api/endpoints";
 import { restoreSession } from "@/api/client";
+import { appendHistory, recordsFor } from "./history";
 import { hasPermission, show } from "./notify";
 import { alertContents, delayMinutes, newAlerts, newestId } from "./plan";
 import { unregisterAlertsTask } from "./registration";
@@ -67,6 +68,8 @@ export async function runAlertsCheck(): Promise<CheckResult> {
   const now = Date.now();
   // How late each alert was, to tell whether the delay matters. Only for alerts that were really shown.
   const late = shown > 0 ? fresh.map((n) => delayMinutes(n, now)).filter((m): m is number => m !== null) : [];
+  // Remembered for the alert history in Settings; never allowed to fail the check.
+  if (shown > 0) await appendHistory(recordsFor(fresh, now)).catch(() => {});
   await patchState({
     seenId: newestId(fresh), // every one of them is newer than `seenId`
     lastCheck: { at: now, result: shown > 0 ? "notified" : "no-permission", shown },

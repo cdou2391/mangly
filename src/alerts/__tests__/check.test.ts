@@ -3,6 +3,7 @@ import { restoreSession } from "@/api/client";
 import { notificationsApi } from "@/api/endpoints";
 import type { AppNotification } from "@/api/types";
 import { runAlertsCheck } from "../check";
+import { readHistory } from "../history";
 import { hasPermission, show } from "../notify";
 import { unregisterAlertsTask } from "../registration";
 import { EMPTY, readState, writeState, type AlertsState } from "../state";
@@ -192,6 +193,57 @@ describe("remembering how it went, for the status line in Settings", () => {
     list.mockResolvedValue([13, 14, 15, 16].map((i) => alert(i, `T${i}`, `${i}`)));
     await runAlertsCheck();
     expect((await readState()).lastCheck).toEqual({ at: NOW, result: "notified", shown: 1 });
+  });
+
+  it("keeps when each alert was created and when it was shown, for the history in Settings", async () => {
+    await setState();
+    list.mockResolvedValue([alert(11, "A", "1", false, "2026-10-17T11:30:00Z"), alert(12, "B", "2", false, "2026-10-17T10:00:00Z")]);
+    await runAlertsCheck();
+    expect(await readHistory()).toEqual([
+      { id: 11, title: "A", chapter: "1", found: Date.parse("2026-10-17T11:30:00Z"), sent: NOW },
+      { id: 12, title: "B", chapter: "2", found: Date.parse("2026-10-17T10:00:00Z"), sent: NOW },
+    ]);
+  });
+
+  it("lists each chapter, not the one summary notification, when many arrive at once", async () => {
+    await setState();
+    list.mockResolvedValue([11, 12, 13, 14, 15].map((i) => alert(i, `T${i}`, `${i}`)));
+    await runAlertsCheck();
+    expect((await readHistory()).map((r) => r.id)).toEqual([11, 12, 13, 14, 15]);
+  });
+
+  it("keeps nothing for alerts that were not shown (blocked, failed, baseline, nothing new)", async () => {
+    await setState();
+    permitted.mockResolvedValue(false);
+    list.mockResolvedValue([alert(11)]);
+    await runAlertsCheck();
+    await setState();
+    permitted.mockResolvedValue(true);
+    present.mockRejectedValueOnce(new Error("no channel"));
+    await runAlertsCheck();
+    await setState({ seenId: null });
+    await runAlertsCheck();
+    await setState({ seenId: 11 });
+    await runAlertsCheck();
+    expect(await readHistory()).toEqual([]);
+  });
+
+  it("still finishes the check when the history cannot be saved", async () => {
+    await setState();
+    list.mockResolvedValue([alert(11)]);
+    const secure = require("expo-secure-store");
+    const mem = require("@/test-utils/mocks").store;
+    const original = secure.setItemAsync.getMockImplementation();
+    secure.setItemAsync.mockImplementation(async (k: string, v: string) => {
+      if (k === "mangly.alerts.history") throw new Error("disk full");
+      mem[k] = v;
+    });
+    try {
+      expect(await runAlertsCheck()).toBe("notified");
+    } finally {
+      secure.setItemAsync.mockImplementation(original);
+    }
+    expect((await readState()).seenId).toBe(11);
   });
 
   it("adds to the delays already kept, and keeps only the latest twenty", async () => {

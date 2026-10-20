@@ -32,6 +32,7 @@ function Routes({ ready }: { ready: boolean }) {
           <Stack.Screen name="manga/[id]" />
           <Stack.Screen name="change-password" />
           <Stack.Screen name="stats" />
+          <Stack.Screen name="alert-history" />
           <Stack.Screen name="mood" />
         </Stack.Protected>
         <Stack.Protected guard={unreachable}>
