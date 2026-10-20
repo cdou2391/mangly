@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { trackingApi } from "@/api/endpoints";
 import type { ReadingStatus, TrackedManga, TrackedMangaUpdate } from "@/api/types";
 import { BackBar } from "@/components/detail/BackBar";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Cover } from "@/components/Cover";
 import { ProgressEditor } from "@/components/detail/ProgressEditor";
 import { RatingStars } from "@/components/detail/RatingStars";
@@ -92,11 +93,7 @@ export default function MangaDetail() {
     },
   });
 
-  const confirmRemove = () =>
-    Alert.alert("Remove from library?", "You'll stop getting updates for this title, and your reading progress is deleted.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => remove.mutate() },
-    ]);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   if (q.isLoading || remove.isSuccess) {
     return (
@@ -326,7 +323,7 @@ export default function MangaDetail() {
           accessibilityRole="button"
           accessibilityLabel="Remove from library"
           disabled={remove.isPending}
-          onPress={confirmRemove}
+          onPress={() => setConfirmingRemove(true)}
           style={({ pressed }) => [styles.remove, (pressed || remove.isPending) && { opacity: 0.7 }]}
         >
           <Ionicons name="trash-outline" size={18} color={palette.danger} />
@@ -334,6 +331,30 @@ export default function MangaDetail() {
         </Pressable>
         {remove.isError ? <Text style={styles.error}>{remove.error.message}</Text> : null}
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmingRemove}
+        icon="trash-outline"
+        destructive
+        title="Remove from library?"
+        message="You'll stop getting updates for this title, and your reading progress is deleted."
+        confirmLabel="Remove"
+        cancelLabel="Keep it"
+        onCancel={() => setConfirmingRemove(false)}
+        onConfirm={() => {
+          setConfirmingRemove(false);
+          remove.mutate();
+        }}
+      >
+        <View style={styles.removing}>
+          <Cover uri={m.cover_url} style={styles.removingCover} />
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={2} style={styles.removingTitle}>
+              {m.canonical_name}
+            </Text>
+            {read ? <Text style={styles.removingMeta}>You're on {read}</Text> : null}
+          </View>
+        </View>
+      </ConfirmDialog>
     </Screen>
   );
 }
@@ -386,5 +407,9 @@ const styles = StyleSheet.create({
   rowHint: { color: palette.muted, fontSize: 13, marginTop: 3 },
   error: { color: palette.danger, fontSize: 13.5, lineHeight: 19 },
   remove: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 50, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,90,90,0.4)", backgroundColor: "rgba(255,90,90,0.07)", marginTop: 4 },
+  removing: { flexDirection: "row", alignItems: "center", gap: 12, alignSelf: "stretch", borderRadius: 14, backgroundColor: palette.raised, padding: 10 },
+  removingCover: { width: 40, height: 58, borderRadius: 7 },
+  removingTitle: { color: palette.text, fontSize: 15, fontWeight: "700" },
+  removingMeta: { color: palette.muted, fontSize: 12.5, marginTop: 3 },
   removeText: { color: palette.danger, fontSize: 15, fontWeight: "700" },
 });

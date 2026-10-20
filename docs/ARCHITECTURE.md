@@ -178,6 +178,10 @@ Under the progress bar on the title page, **I'M UP TO CHAPTER** is a number fiel
 - **Continue reading** opens the saved chapter link. Because that link can be left over from before a manual change, it is hidden when the link itself names a different chapter than the one you are on (`urlChapter`, e.g. `/chapter-188/`); links that carry an id instead of a number are trusted. **Open on <site>** opens the title's page on its source site and never changes progress.
 - **Immediate, and put back on failure,** like rating: the new chapter and progress bar show at once; if saving fails they go back with the usual message, and the number you typed stays in the field so Save can be pressed again. What is typed lives in the page (`draft`), and goes back to following the saved chapter after any successful save.
 
+## Removing a title (confirmation dialog)
+
+"Remove from library" on a title's page asks first in the app's own `ConfirmDialog` (`components/ConfirmDialog.tsx`), not the system alert: a card centred over a dimmed backdrop with a trash badge, the title's cover, name and "You're on Ch. N", the reminder that updates stop and progress is deleted, and two buttons, **Keep it** (left) and **Remove** (right, in the alert colour). Only **Remove** deletes: a tap on the backdrop, Android's Back button or **Keep it** cancels, and a tap on the card itself does nothing. The component is generic (title, message, icon, labels, `destructive`, children), so the other confirmations (sign out, clear read alerts) can use it. Those still use the system alert.
+
 ## Previewing a title before tracking
 
 In Search, tapping a result that is not yet in the library opens a **preview sheet** (a bottom `Modal`) instead of doing nothing; a result already in the library still opens its page.

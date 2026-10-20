@@ -1,5 +1,5 @@
-import { Alert, StyleSheet } from "react-native";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -683,40 +683,58 @@ describe("when the server cannot be reached", () => {
 });
 
 describe("removing", () => {
-  beforeEach(() => jest.spyOn(Alert, "alert").mockImplementation(() => {}));
-  afterEach(() => (Alert.alert as jest.Mock).mockRestore());
+  const dialog = () => screen.queryByTestId("confirm-dialog");
 
-  const answer = async (label: string) => {
-    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
-    await act(async () => buttons.find((b) => b.text === label)!.onPress?.());
-  };
-
-  it("asks first, and does nothing if cancelled", async () => {
+  it("asks first, in the app's own dialog, saying which title and where the reader is, and does nothing if cancelled", async () => {
     await renderDetail();
+    expect(dialog()).toBeNull();
     await fireEvent.press(await screen.findByRole("button", { name: "Remove from library" }));
-    expect(Alert.alert).toHaveBeenCalledWith("Remove from library?", expect.any(String), expect.any(Array));
-    await answer("Cancel");
+    const card = within(screen.getByTestId("confirm-dialog"));
+    expect(card.getByText("Remove from library?")).toBeTruthy();
+    expect(card.getByText("Naruto")).toBeTruthy();
+    expect(card.getByText(/You're on Ch\./)).toBeTruthy();
+    expect(card.getByText(/your reading progress is deleted/)).toBeTruthy();
+    await fireEvent.press(card.getByRole("button", { name: "Keep it" }));
+    expect(dialog()).toBeNull();
     expect(remove).not.toHaveBeenCalled();
     expect(router.back).not.toHaveBeenCalled();
+  });
+
+  it("is also cancelled by a tap outside it or the Back button, never by a tap on the card", async () => {
+    await renderDetail();
+    await fireEvent.press(await screen.findByRole("button", { name: "Remove from library" }));
+    await fireEvent.press(screen.getByTestId("confirm-dialog")); // the card swallows the tap
+    expect(dialog()).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Dismiss: Remove from library?"));
+    expect(dialog()).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Remove from library" }));
+    type Node = { parent: Node | null; props: { onRequestClose?: () => void } };
+    let node = screen.getByTestId("confirm-dialog") as unknown as Node | null;
+    while (node && !node.props.onRequestClose) node = node.parent; // up to the Modal, which Android's Back button closes
+    expect(node).not.toBeNull();
+    await act(async () => node!.props.onRequestClose!());
+    expect(dialog()).toBeNull();
+    expect(remove).not.toHaveBeenCalled();
   });
 
   it("removes it and goes back once confirmed, without flashing 'not in your library'", async () => {
     list.mockResolvedValueOnce([item()]).mockResolvedValue([]);
     await renderDetail();
     await fireEvent.press(await screen.findByRole("button", { name: "Remove from library" }));
-    await answer("Remove");
+    await fireEvent.press(within(screen.getByTestId("confirm-dialog")).getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(router.back).toHaveBeenCalled());
     expect(remove).toHaveBeenCalledTimes(1);
     await act(async () => {}); // let the emptied library list render: the screen is still on show until the navigation happens
     expect(screen.queryByText("Not in your library")).toBeNull();
   });
 
-  it("shows why removing failed and stays on the page", async () => {
+  it("shows why removing failed and stays on the page, with the dialog closed", async () => {
     remove.mockRejectedValue(new Error("Network error. Check your connection."));
     await renderDetail();
     await fireEvent.press(await screen.findByRole("button", { name: "Remove from library" }));
-    await answer("Remove");
+    await fireEvent.press(within(screen.getByTestId("confirm-dialog")).getByRole("button", { name: "Remove" }));
     expect(await screen.findByText("Network error. Check your connection.")).toBeTruthy();
+    expect(dialog()).toBeNull();
     expect(router.back).not.toHaveBeenCalled();
     expect(screen.getByText("Naruto")).toBeTruthy();
   });
