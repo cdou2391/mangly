@@ -11,6 +11,7 @@ import { useOnline } from "@/api/reachability";
 import { useAuth } from "@/auth/AuthContext";
 import { WEB_URL } from "@/config";
 import { shareLibrary } from "@/export/shareLibrary";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { LibraryStats } from "@/components/settings/LibraryStats";
@@ -26,6 +27,7 @@ const VERSION = Constants.expoConfig?.version ?? "dev";
 export default function Settings() {
   const { state, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const online = useOnline();
   const alerts = useAlertSetting();
@@ -93,18 +95,11 @@ export default function Settings() {
       ],
     );
 
-  const confirmSignOut = () =>
-    Alert.alert("Sign out?", "You will stop receiving push notifications on this device.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign out",
-        style: "destructive",
-        onPress: () => {
-          setSigningOut(true);
-          void signOut().finally(() => setSigningOut(false));
-        },
-      },
-    ]);
+  const signOutNow = () => {
+    setConfirmingSignOut(false);
+    setSigningOut(true);
+    void signOut().finally(() => setSigningOut(false));
+  };
 
   return (
     <Screen padded={false}>
@@ -185,7 +180,7 @@ export default function Settings() {
             accessibilityLabel="Sign out"
             accessibilityState={{ busy: signingOut, disabled: signingOut }}
             disabled={signingOut}
-            onPress={confirmSignOut}
+            onPress={() => setConfirmingSignOut(true)}
             style={({ pressed }) => [styles.signOut, (pressed || signingOut) && { opacity: 0.7 }]}
           >
             {signingOut ? <ActivityIndicator size="small" color={palette.danger} /> : <Ionicons name="log-out-outline" size={19} color={palette.danger} />}
@@ -193,6 +188,17 @@ export default function Settings() {
           </Pressable>
         </View>
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmingSignOut}
+        icon="log-out-outline"
+        destructive
+        title="Sign out?"
+        message="You will stop receiving push notifications on this device."
+        confirmLabel="Sign out"
+        cancelLabel="Stay signed in"
+        onCancel={() => setConfirmingSignOut(false)}
+        onConfirm={signOutNow}
+      />
     </Screen>
   );
 }

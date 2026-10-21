@@ -1,5 +1,5 @@
 import { Alert } from "react-native";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -432,19 +432,16 @@ describe("the connection", () => {
 });
 
 describe("signing out", () => {
-  beforeEach(() => jest.spyOn(Alert, "alert").mockImplementation(() => {}));
-  afterEach(() => (Alert.alert as jest.Mock).mockRestore());
+  const dialog = () => within(screen.getByTestId("confirm-dialog"));
 
-  const answer = async (label: string) => {
-    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
-    await act(async () => buttons.find((b) => b.text === label)!.onPress?.());
-  };
-
-  it("asks first, and does nothing if cancelled", async () => {
+  it("asks first, in the app's own dialog, and does nothing if cancelled", async () => {
     await renderSettings();
+    expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     await fireEvent.press(await screen.findByRole("button", { name: "Sign out" }));
-    expect(Alert.alert).toHaveBeenCalledWith("Sign out?", expect.stringContaining("push notifications"), expect.any(Array));
-    await answer("Cancel");
+    expect(dialog().getByText("Sign out?")).toBeTruthy();
+    expect(dialog().getByText(/push notifications/)).toBeTruthy();
+    await fireEvent.press(dialog().getByRole("button", { name: "Stay signed in" }));
+    expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     expect(signOut).not.toHaveBeenCalled();
   });
 
@@ -453,7 +450,8 @@ describe("signing out", () => {
     signOut.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
     await renderSettings();
     await fireEvent.press(await screen.findByRole("button", { name: "Sign out" }));
-    await answer("Sign out");
+    await fireEvent.press(dialog().getByRole("button", { name: "Sign out" }));
+    expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Sign out" }).props.accessibilityState.busy).toBe(true);
     await act(async () => finish());

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useAuth } from "@/auth/AuthContext";
 import { AuthButton } from "@/components/auth/AuthButton";
 import { AuthScreen } from "@/components/auth/AuthScreen";
 import { BrandHeader } from "@/components/auth/BrandHeader";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { auth } from "@/components/auth/authTheme";
 
 /**
@@ -24,11 +25,7 @@ export default function Offline() {
     }
   };
 
-  const confirmSignOut = () =>
-    Alert.alert("Sign out?", "You'll need to log in again with your email and password.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Sign out", style: "destructive", onPress: () => void signOut() },
-    ]);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
 
   return (
     <AuthScreen header={<BrandHeader compact />}>
@@ -46,7 +43,21 @@ export default function Offline() {
       </View>
       <AuthButton title="Try again" icon="refresh" onPress={tryAgain} loading={busy} />
       <View style={{ height: 12 }} />
-      <AuthButton variant="secondary" title="Sign out" icon="log-out-outline" onPress={confirmSignOut} />
+      <AuthButton variant="secondary" title="Sign out" icon="log-out-outline" onPress={() => setConfirmingSignOut(true)} />
+      <ConfirmDialog
+        visible={confirmingSignOut}
+        icon="log-out-outline"
+        destructive
+        title="Sign out?"
+        message="You'll need to log in again with your email and password."
+        confirmLabel="Sign out"
+        cancelLabel="Stay signed in"
+        onCancel={() => setConfirmingSignOut(false)}
+        onConfirm={() => {
+          setConfirmingSignOut(false);
+          void signOut();
+        }}
+      />
     </AuthScreen>
   );
 }

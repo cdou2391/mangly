@@ -1,5 +1,5 @@
-import { Alert, Platform, ToastAndroid } from "react-native";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Platform, ToastAndroid } from "react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -262,23 +262,17 @@ describe("opening a chapter", () => {
 
 describe("mark all read", () => {
   /** The confirmation dialog: press the button with this label. */
-  const answer = async (label: string) => {
-    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
-    await act(async () => buttons.find((b) => b.text === label)!.onPress?.());
-  };
-
-  let dialog: jest.SpyInstance;
-  beforeEach(() => {
-    dialog = jest.spyOn(Alert, "alert").mockImplementation(() => {});
-  });
-  afterEach(() => dialog.mockRestore());
+  const answer = async (label: string) => fireEvent.press(within(screen.getByTestId("confirm-dialog")).getByRole("button", { name: label }));
+  const asked = () => within(screen.getByTestId("confirm-dialog"));
 
   it("asks first, because it moves reading progress", async () => {
     await renderUpdates();
     await fireEvent.press(await screen.findByRole("button", { name: "Mark all read" }));
-    expect(Alert.alert).toHaveBeenCalledWith("Mark everything as read?", expect.stringContaining("progress"), expect.any(Array));
+    expect(asked().getByText("Mark everything as read?")).toBeTruthy();
+    expect(asked().getByText(/progress/)).toBeTruthy();
     expect(update).not.toHaveBeenCalled();
     await answer("Cancel");
+    expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     expect(update).not.toHaveBeenCalled();
     expect(markAllAlertsRead).not.toHaveBeenCalled();
   });
@@ -314,16 +308,8 @@ describe("mark all read", () => {
 });
 
 describe("clear read alerts", () => {
-  const answer = async (label: string) => {
-    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)![2] as { text: string; onPress?: () => void }[];
-    await act(async () => buttons.find((b) => b.text === label)!.onPress?.());
-  };
-  let dialog: jest.SpyInstance;
-  beforeEach(() => {
-    dialog = jest.spyOn(Alert, "alert").mockImplementation(() => {});
-  });
-  afterEach(() => dialog.mockRestore());
-
+  const answer = async (label: string) => fireEvent.press(within(screen.getByTestId("confirm-dialog")).getByRole("button", { name: label }));
+  const asked = () => within(screen.getByTestId("confirm-dialog"));
   /** Two read alerts: one for the newest One Piece chapter (the feed shows it anyway), one for an older chapter. */
   const withHistory = () => {
     let a = [
@@ -356,9 +342,11 @@ describe("clear read alerts", () => {
     withHistory();
     await renderUpdates();
     await fireEvent.press(await screen.findByRole("button", { name: "Clear read alerts" }));
-    expect(Alert.alert).toHaveBeenCalledWith("Clear read alerts?", expect.stringContaining("2 alerts you've already read"), expect.any(Array));
-    expect((Alert.alert as jest.Mock).mock.calls.at(-1)![1]).toMatch(/Unread chapters and your reading progress are not touched/);
+    expect(asked().getByText("Clear read alerts?")).toBeTruthy();
+    expect(asked().getByText(/^2 alerts you've already read/)).toBeTruthy();
+    expect(asked().getByText(/Unread chapters and your reading progress are not touched/)).toBeTruthy();
     await answer("Cancel");
+    expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     expect(clearReadAlerts).not.toHaveBeenCalled();
   });
 
@@ -366,7 +354,7 @@ describe("clear read alerts", () => {
     server([alert(13, 3, "One Piece", "1128", at(3 * DAY), true)], [latest(3, "One Piece", "1128", at(3 * DAY), false)]);
     await renderUpdates();
     await fireEvent.press(await screen.findByRole("button", { name: "Clear read alerts" }));
-    expect((Alert.alert as jest.Mock).mock.calls.at(-1)![1]).toMatch(/^1 alert you've already read/);
+    expect(asked().getByText(/^1 alert you've already read/)).toBeTruthy();
   });
 
   it("removes the read alerts from the history once confirmed, and the button goes away", async () => {
@@ -375,6 +363,7 @@ describe("clear read alerts", () => {
     expect(await row(/^One Piece\. Ch\. 1127/)).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Clear read alerts" }));
     await answer("Clear");
+    expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     await waitFor(() => expect(clearReadAlerts).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByRole("button", { name: /^One Piece\. Ch\. 1127/ })).toBeNull());
     expect(screen.getByRole("button", { name: /^One Piece\. Ch\. 1128/ })).toBeTruthy(); // the newest chapter still shows: it comes from the title

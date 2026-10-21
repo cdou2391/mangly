@@ -5,6 +5,7 @@ import { authApi } from "@/api/endpoints";
 import { ping, restoreSession } from "@/api/client";
 import type { RestoreOutcome } from "@/api/client";
 import { setOnline } from "@/api/reachability";
+import { stopAlerts } from "@/alerts";
 import { clearExports } from "@/export/shareLibrary";
 import { clearSnapshot, loadSnapshot, MAX_AGE_MS, restoreInto, startPersisting, type Snapshot } from "@/cache/store";
 import { AuthProvider, RETRY_DELAYS_MS, STARTUP_WAIT_MS, useAuth, useFeature } from "../AuthContext";
@@ -486,6 +487,46 @@ describe("changing the password", () => {
     await act(async () => void (result = await auth.changePassword("old-pass1", "new-pass2")));
     expect(result).toBe(false);
     expect(apiLogout).toHaveBeenCalled();
+  });
+});
+
+describe("signing out", () => {
+  let auth!: ReturnType<typeof useAuth>;
+  function Grab() {
+    auth = useAuth();
+    return null;
+  }
+  const mount = async () => {
+    restore.mockImplementation(async () => {
+      listener({ user: { ...ada, email: "ada@example.com" } as never });
+      return "ok" as const;
+    });
+    await render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <Grab />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await wait(0);
+  };
+
+  it("stops the alerts and revokes the session", async () => {
+    await mount();
+    apiLogout.mockClear();
+    (stopAlerts as jest.Mock).mockClear();
+    await act(async () => auth.signOut());
+    expect(stopAlerts).toHaveBeenCalledTimes(1);
+    expect(apiLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it("still revokes the session if the alerts cannot be stopped, and does not fail if the server cannot be reached", async () => {
+    await mount();
+    apiLogout.mockClear();
+    (stopAlerts as jest.Mock).mockRejectedValueOnce(new Error("boom"));
+    apiLogout.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => auth.signOut());
+    expect(apiLogout).toHaveBeenCalledTimes(1);
   });
 });
 

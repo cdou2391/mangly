@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Alert, Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ErrorNote, Loading, Screen } from "@/components/ui";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { FeedFilter, type FeedFilterKey } from "@/components/updates/FeedFilter";
@@ -27,25 +28,9 @@ export default function Updates() {
   const shown = useMemo(() => (filter === "new" ? feed.items.filter((i) => i.unread) : feed.items), [filter, feed.items]);
   const sections = useMemo(() => groupByDay(shown, new Date()), [shown]);
 
-  const confirmMarkAll = () =>
-    Alert.alert(
-      "Mark everything as read?",
-      "Your reading progress moves to the latest chapter of every title with something new.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Mark all read", onPress: () => markAll.mutate(feed.fresh) },
-      ],
-    );
-
-  const confirmClearRead = () =>
-    Alert.alert(
-      "Clear read alerts?",
-      `${feed.readAlertCount} ${feed.readAlertCount === 1 ? "alert you've" : "alerts you've"} already read will be removed from your history. Unread chapters and your reading progress are not touched.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Clear", style: "destructive", onPress: () => clearRead.mutate() },
-      ],
-    );
+  const [asking, setAsking] = useState<"mark-all" | "clear" | null>(null);
+  const confirmMarkAll = () => setAsking("mark-all");
+  const confirmClearRead = () => setAsking("clear");
 
   const subtitle =
     feed.items.length === 0 ? null : feed.unreadCount > 0 ? (
@@ -134,6 +119,31 @@ export default function Updates() {
             </View>
           )
         }
+      />
+      <ConfirmDialog
+        visible={asking === "mark-all"}
+        icon="checkmark-done"
+        title="Mark everything as read?"
+        message="Your reading progress moves to the latest chapter of every title with something new."
+        confirmLabel="Mark all read"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null);
+          markAll.mutate(feed.fresh);
+        }}
+      />
+      <ConfirmDialog
+        visible={asking === "clear"}
+        icon="trash-outline"
+        destructive
+        title="Clear read alerts?"
+        message={`${feed.readAlertCount} ${feed.readAlertCount === 1 ? "alert you've" : "alerts you've"} already read will be removed from your history. Unread chapters and your reading progress are not touched.`}
+        confirmLabel="Clear"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null);
+          clearRead.mutate();
+        }}
       />
     </Screen>
   );
