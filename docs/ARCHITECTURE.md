@@ -192,6 +192,13 @@ Three small, short effects, all built on React Native's own `Animated` with the 
 
 **Reduce motion:** with Android's "Remove animations" on (`useReduceMotion`, which also follows the setting changing while the app is open), the content is shown at once and rows do not move. The screen transition is the system's own and follows the same system setting. **Not done:** the cover does not fly from the list into the page (a shared-element transition). On Android that needs the Reanimated library and a native rebuild, and is flaky inside a list nested in a screen; it can be revisited if wanted.
 
+## Motion between screens
+
+- **Switching tabs** (`app/(tabs)/_layout.tsx`): the tab navigator's `shift` animation, so the screens slide a little and fade instead of swapping. The selected tab's icon pops (a small spring from a smaller size) and its red bar grows out from the middle (`components/TabIcon.tsx`). A tab that is already selected when the bar first appears is simply there.
+- **Opening a screen** (`app/_layout.tsx`): a title rises up (see above); Change password, Stats, Recent alerts and Pick by mood slide in from the right.
+- **Moving between the app, sign-in and the "can't reach" screen** cross-fades, so signing in or out is a change of scene, not a push.
+- Reduce motion: the tab icon and bar stand still; the screen transitions follow Android's own animation setting.
+
 ## Previewing a title before tracking
 
 In Search, tapping a result that is not yet in the library opens a **preview sheet** (a bottom `Modal`) instead of doing nothing; a result already in the library still opens its page.

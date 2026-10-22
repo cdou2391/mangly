@@ -28,19 +28,20 @@ function Routes({ ready }: { ready: boolean }) {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Protected guard={signedIn}>
-          <Stack.Screen name="(tabs)" />
+          {/* Moving between the app, the sign-in screens and the "can't reach" screen cross-fades; screens opened from within the app slide in. */}
+          <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
           {/* A title opens by rising into place, and its content settles in behind it (see the page itself). */}
           <Stack.Screen name="manga/[id]" options={{ animation: "fade_from_bottom" }} />
-          <Stack.Screen name="change-password" />
-          <Stack.Screen name="stats" />
-          <Stack.Screen name="alert-history" />
-          <Stack.Screen name="mood" />
+          <Stack.Screen name="change-password" options={{ animation: "slide_from_right" }} />
+          <Stack.Screen name="stats" options={{ animation: "slide_from_right" }} />
+          <Stack.Screen name="alert-history" options={{ animation: "slide_from_right" }} />
+          <Stack.Screen name="mood" options={{ animation: "slide_from_right" }} />
         </Stack.Protected>
         <Stack.Protected guard={unreachable}>
-          <Stack.Screen name="offline" />
+          <Stack.Screen name="offline" options={{ animation: "fade" }} />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn && !unreachable}>
-          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
         </Stack.Protected>
       </Stack>
     </>

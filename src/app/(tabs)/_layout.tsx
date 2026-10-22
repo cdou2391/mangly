@@ -1,8 +1,9 @@
-import { StyleSheet, View, type ColorValue } from "react-native";
+import { StyleSheet, type ColorValue } from "react-native";
 import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { TabIcon } from "@/components/TabIcon";
 import { useUpdatesFeed } from "@/hooks/useUpdatesFeed";
 import { palette } from "@/theme";
 
@@ -16,12 +17,7 @@ const ICONS: Record<string, [IconName, IconName]> = {
 
 const icon =
   (route: keyof typeof ICONS) =>
-  ({ focused, color }: { focused: boolean; color: ColorValue }) => (
-    <View style={styles.iconBox}>
-      {focused ? <View style={styles.indicator} /> : null}
-      <Ionicons name={ICONS[route][focused ? 0 : 1]} size={24} color={color} />
-    </View>
-  );
+  ({ focused, color }: { focused: boolean; color: ColorValue }) => <TabIcon focused={focused} color={color} names={ICONS[route]} />;
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -34,6 +30,8 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          // Switching tabs slides the screens a little and fades them, instead of swapping them.
+          animation: "shift",
           tabBarActiveTintColor: "#FFFFFF",
           tabBarInactiveTintColor: "#76767C",
           // Explicit height: icon + label need room, and the system navigation bar inset has to be added by hand.
@@ -58,9 +56,3 @@ export default function TabsLayout() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  iconBox: { alignItems: "center", justifyContent: "center" },
-  // A red bar at the top edge of the active tab, with a glow where the platform supports one.
-  indicator: { position: "absolute", top: -11, width: 30, height: 3, borderBottomLeftRadius: 3, borderBottomRightRadius: 3, backgroundColor: palette.primary, shadowColor: palette.primary, shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
-});
