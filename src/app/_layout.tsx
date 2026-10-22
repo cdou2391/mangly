@@ -1,6 +1,6 @@
 import { View } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { DarkTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
@@ -8,6 +8,7 @@ import { SHELL_ONLY } from "@/config";
 import { AlertsEffects } from "@/alerts";
 import { Loading } from "@/components/ui";
 import { SplashOverlay } from "@/components/SplashOverlay";
+import { palette } from "@/theme";
 
 // Keep the native splash up until the splash artwork (SplashOverlay) has loaded and taken over.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -15,6 +16,10 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
 });
+
+// The navigator paints a background behind every screen, and while screens fade or slide it shows through. Its default is white,
+// which showed as a flash between screens, so the app's own dark background is set everywhere it can appear.
+const navigationTheme = { ...DarkTheme, colors: { ...DarkTheme.colors, background: palette.bg, card: palette.bg, border: palette.border } };
 
 function Routes({ ready }: { ready: boolean }) {
   const { state } = useAuth();
@@ -25,7 +30,7 @@ function Routes({ ready }: { ready: boolean }) {
   return (
     <>
       {signedIn ? <AlertsEffects /> : null}
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }}>
         <Stack.Screen name="index" />
         <Stack.Protected guard={signedIn}>
           {/* Moving between the app, the sign-in screens and the "can't reach" screen cross-fades; screens opened from within the app slide in. */}
@@ -54,7 +59,7 @@ function FullApp() {
   const { state } = useAuth();
   const ready = state.status !== "loading";
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
       <Routes ready={ready} />
       <SplashOverlay appReady={ready} />
     </View>
@@ -63,8 +68,8 @@ function FullApp() {
 
 function Shell() {
   return (
-    <View style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }} />
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.bg } }} />
       <SplashOverlay appReady />
     </View>
   );
@@ -82,8 +87,10 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <StatusBar style="auto" />
-        <FullApp />
+        <ThemeProvider value={navigationTheme}>
+          <StatusBar style="auto" />
+          <FullApp />
+        </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

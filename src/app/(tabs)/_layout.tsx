@@ -30,6 +30,8 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          // The scene behind a tab while it fades or shifts; unset, it is white and flashes between tabs.
+          sceneStyle: { backgroundColor: palette.bg },
           // Switching tabs slides the screens a little and fades them, instead of swapping them.
           animation: "shift",
           tabBarActiveTintColor: "#FFFFFF",

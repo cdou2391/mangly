@@ -197,6 +197,7 @@ Three small, short effects, all built on React Native's own `Animated` with the 
 - **Switching tabs** (`app/(tabs)/_layout.tsx`): the tab navigator's `shift` animation, so the screens slide a little and fade instead of swapping. The selected tab's icon pops (a small spring from a smaller size) and its red bar grows out from the middle (`components/TabIcon.tsx`). A tab that is already selected when the bar first appears is simply there.
 - **Opening a screen** (`app/_layout.tsx`): a title rises up (see above); Change password, Stats, Recent alerts and Pick by mood slide in from the right.
 - **Moving between the app, sign-in and the "can't reach" screen** cross-fades, so signing in or out is a change of scene, not a push.
+- **No white flash:** the navigator paints its own background behind every screen, and while screens fade or slide that background shows through; its default is white. The app therefore sets the dark background in all four places it can come from: a navigation theme (`ThemeProvider` with `DarkTheme` and the app's `bg`), the tabs' `sceneStyle`, the stack's `contentStyle`, and the root view. Any new navigator needs the same.
 - Reduce motion: the tab icon and bar stand still; the screen transitions follow Android's own animation setting.
 
 ## Previewing a title before tracking
