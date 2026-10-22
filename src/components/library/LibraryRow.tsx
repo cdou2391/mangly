@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { TrackedManga } from "@/api/types";
 import { Cover } from "@/components/Cover";
+import { PressScale } from "@/components/motion/PressScale";
 import { readProgress, shortChapter } from "@/utils/chapters";
 import { unreadOf } from "@/utils/library";
 import { palette } from "@/theme";
@@ -18,7 +19,7 @@ export function LibraryRow({ item, onPress }: { item: TrackedManga; onPress: () 
   const spoken = parts.join(". "); // what a screen reader says: sentences, not visual spacing
 
   return (
-    <Pressable
+    <PressScale
       accessibilityRole="button"
       accessibilityLabel={`${item.manga.canonical_name}. ${spoken}.${behind ? ` ${unread} unread.` : ""}`}
       onPress={onPress}
@@ -45,7 +46,7 @@ export function LibraryRow({ item, onPress }: { item: TrackedManga; onPress: () 
       ) : unread === 0 ? (
         <Ionicons name="checkmark-circle" size={22} color={palette.faint} />
       ) : null}
-    </Pressable>
+    </PressScale>
   );
 }
 

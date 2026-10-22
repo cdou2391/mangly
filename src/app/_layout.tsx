@@ -29,7 +29,8 @@ function Routes({ ready }: { ready: boolean }) {
         <Stack.Screen name="index" />
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="manga/[id]" />
+          {/* A title opens by rising into place, and its content settles in behind it (see the page itself). */}
+          <Stack.Screen name="manga/[id]" options={{ animation: "fade_from_bottom" }} />
           <Stack.Screen name="change-password" />
           <Stack.Screen name="stats" />
           <Stack.Screen name="alert-history" />

@@ -182,6 +182,16 @@ Under the progress bar on the title page, **I'M UP TO CHAPTER** is a number fiel
 
 "Remove from library" on a title's page asks first in the app's own `ConfirmDialog` (`components/ConfirmDialog.tsx`), not the system alert: a card centred over a dimmed backdrop with a trash badge, the title's cover, name and "You're on Ch. N", the reminder that updates stop and progress is deleted, and two buttons, **Keep it** (left) and **Remove** (right, in the alert colour). Only **Remove** deletes: a tap on the backdrop, Android's Back button or **Keep it** cancels, and a tap on the card itself does nothing. The same dialog is used for every confirmation: **Sign out** (Settings, and the "can't reach" screen; the cancel button reads *Stay signed in*), **Clear read alerts** and **Mark everything as read** (Updates; the last one is not destructive, so its button is red-brand rather than danger-red). The component is generic (title, message, icon, labels, `destructive`, children). Plain system alerts remain only for notices with a single OK (export failed, notifications blocked, "Alerts arriving late?").
 
+## Motion when a title opens
+
+Three small, short effects, all built on React Native's own `Animated` with the native driver (no new library, nothing native to rebuild):
+
+- **The screen rises in.** The title page is registered with the native stack's `fade_from_bottom` animation (`app/_layout.tsx`), so it fades up into place and falls back the same way on Back. Other screens keep the platform's default.
+- **Its content settles in behind it** (`components/motion/Reveal.tsx`): the cover and name grow from 94% to full size, then the progress and reading buttons, then the rest, each fading and rising 16 points, 90 ms apart, 340 ms each. It plays once when the page first shows; later edits on the page do not replay it.
+- **A library row sinks under the finger** (`components/motion/PressScale.tsx`): 97% size while pressed, springing back on release.
+
+**Reduce motion:** with Android's "Remove animations" on (`useReduceMotion`, which also follows the setting changing while the app is open), the content is shown at once and rows do not move. The screen transition is the system's own and follows the same system setting. **Not done:** the cover does not fly from the list into the page (a shared-element transition). On Android that needs the Reanimated library and a native rebuild, and is flaky inside a list nested in a screen; it can be revisited if wanted.
+
 ## Previewing a title before tracking
 
 In Search, tapping a result that is not yet in the library opens a **preview sheet** (a bottom `Modal`) instead of doing nothing; a result already in the library still opens its page.

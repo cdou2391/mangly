@@ -7,6 +7,7 @@ import { trackingApi } from "@/api/endpoints";
 import type { ReadingStatus, TrackedManga, TrackedMangaUpdate } from "@/api/types";
 import { BackBar } from "@/components/detail/BackBar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Reveal } from "@/components/motion/Reveal";
 import { Cover } from "@/components/Cover";
 import { ProgressEditor } from "@/components/detail/ProgressEditor";
 import { RatingStars } from "@/components/detail/RatingStars";
@@ -147,189 +148,195 @@ export default function MangaDetail() {
     <Screen padded={false}>
       <BackBar />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.hero}>
-          <Cover uri={m.cover_url} style={styles.cover} />
-          <View style={styles.heroText}>
-            <Text accessibilityRole="header" style={styles.title}>
-              {m.canonical_name}
-            </Text>
-            {m.author ? <Text style={styles.author}>{m.author}</Text> : null}
-            <View style={styles.pills}>
-              {status && status !== "unknown" ? <Pill label={titleCase(status)} /> : null}
-              {site ? <Pill label={site} /> : null}
+        <Reveal scale={0.94} rise={0}>
+          <View style={styles.hero}>
+            <Cover uri={m.cover_url} style={styles.cover} />
+            <View style={styles.heroText}>
+              <Text accessibilityRole="header" style={styles.title}>
+                {m.canonical_name}
+              </Text>
+              {m.author ? <Text style={styles.author}>{m.author}</Text> : null}
+              <View style={styles.pills}>
+                {status && status !== "unknown" ? <Pill label={titleCase(status)} /> : null}
+                {site ? <Pill label={site} /> : null}
+              </View>
             </View>
           </View>
-        </View>
+        </Reveal>
 
-        <View style={styles.progressCard}>
-          <View style={styles.progressRow}>
+        <Reveal delay={90} style={styles.group}>
+          <View style={styles.progressCard}>
+            <View style={styles.progressRow}>
+              <View>
+                <Text style={styles.progressLabel}>YOU READ</Text>
+                <Text style={styles.progressValue}>{read ?? "Not started"}</Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={styles.progressLabel}>LATEST</Text>
+                <Text style={styles.progressValue}>{latest ?? "—"}</Text>
+              </View>
+            </View>
+            {progress !== null ? (
+              <View style={styles.track}>
+                <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
+              </View>
+            ) : null}
+            <View style={styles.editor}>
+              <ProgressEditor saved={item.last_chapter_read} text={draft ?? (lr === null ? "" : formatChapter(lr))} onText={setDraft} busy={setProgress.isPending} onSave={saveProgress} />
+            </View>
+            {setProgress.isError ? (
+              <Text accessibilityLiveRegion="polite" style={[styles.error, { marginTop: 10 }]}>
+                {setProgress.error.message}
+              </Text>
+            ) : null}
+          </View>
+
+          {latestUrl || firstUrl ? (
+            <View style={styles.readRow}>
+              {firstUrl ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Read first chapter"
+                  onPress={() => openInBrowser(firstUrl)}
+                  style={({ pressed }) => [latestUrl ? styles.readFirst : styles.primary, !latestUrl && { flex: 1 }, pressed && { opacity: 0.85 }]}
+                >
+                  <Ionicons name="play-skip-back-outline" size={19} color={latestUrl ? palette.text : "#fff"} />
+                  <Text style={latestUrl ? styles.readFirstText : styles.primaryText}>{latestUrl ? "First chapter" : "Read first chapter"}</Text>
+                </Pressable>
+              ) : null}
+              {latestUrl ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Read latest chapter"
+                  onPress={() => openInBrowser(latestUrl)}
+                  style={({ pressed }) => [styles.primary, { flex: firstUrl ? 1.25 : 1 }, pressed && { opacity: 0.85 }]}
+                >
+                  <Ionicons name="book-outline" size={19} color="#fff" />
+                  <Text style={styles.primaryText}>{firstUrl ? "Latest chapter" : "Read latest chapter"}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {behind ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Mark ${latest ?? "latest"} as read`}
+              disabled={update.isPending}
+              onPress={() => update.mutate({ last_chapter_read: chapterToStore(m.latest_chapter!), last_chapter_url: m.latest_chapter_url })}
+              style={({ pressed }) => [styles.secondary, (pressed || update.isPending) && { opacity: 0.7 }]}
+            >
+              <Ionicons name="checkmark-done" size={19} color={palette.text} />
+              <Text style={styles.secondaryText}>Mark {latest ?? "latest"} as read</Text>
+            </Pressable>
+          ) : null}
+
+          {continueUrl || sourceUrl ? (
+            <View style={styles.links}>
+              {continueUrl ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue reading"
+                  onPress={() => openInBrowser(continueUrl)}
+                  style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]}
+                >
+                  <Ionicons name="play-outline" size={18} color={palette.text} />
+                  <Text style={styles.linkText}>Continue reading</Text>
+                </Pressable>
+              ) : null}
+              {sourceUrl ? (
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open on ${site ?? "the source site"}`}
+                  onPress={() => openInBrowser(sourceUrl)}
+                  style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]}
+                >
+                  <Ionicons name="open-outline" size={18} color={palette.text} />
+                  <Text style={styles.linkText}>Open on {site ?? "the site"}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+        </Reveal>
+
+        <Reveal delay={180} style={styles.group}>
+          {m.summary ? (
             <View>
-              <Text style={styles.progressLabel}>YOU READ</Text>
-              <Text style={styles.progressValue}>{read ?? "Not started"}</Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={styles.progressLabel}>LATEST</Text>
-              <Text style={styles.progressValue}>{latest ?? "—"}</Text>
-            </View>
-          </View>
-          {progress !== null ? (
-            <View style={styles.track}>
-              <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
+              <Text style={styles.sectionLabel}>ABOUT</Text>
+              <Text numberOfLines={expanded ? undefined : 4} style={styles.summary}>
+                {m.summary}
+              </Text>
+              {longSummary ? (
+                <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setExpanded((e) => !e)}>
+                  <Text style={styles.more}>{expanded ? "Show less" : "Read more"}</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
-          <View style={styles.editor}>
-            <ProgressEditor saved={item.last_chapter_read} text={draft ?? (lr === null ? "" : formatChapter(lr))} onText={setDraft} busy={setProgress.isPending} onSave={saveProgress} />
+
+          <View>
+            <Text style={styles.sectionLabel}>READING STATUS</Text>
+            <View style={styles.chips}>
+              {STATUSES.map((s) => {
+                const on = item.reading_status === s.key;
+                return (
+                  <Pressable
+                    key={s.key}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    disabled={update.isPending}
+                    onPress={() => !on && update.mutate({ reading_status: s.key })}
+                    style={[styles.chip, on && styles.chipOn]}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{s.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
-          {setProgress.isError ? (
-            <Text accessibilityLiveRegion="polite" style={[styles.error, { marginTop: 10 }]}>
-              {setProgress.error.message}
+
+          <View>
+            <Text style={styles.sectionLabel}>YOUR RATING</Text>
+            <RatingStars value={item.rating} busy={rate.isPending} onRate={(n) => rate.mutate(n)} onClear={() => rate.mutate(null)} />
+            {rate.isError ? (
+              <Text accessibilityLiveRegion="polite" style={[styles.error, { marginTop: 8 }]}>
+                {rate.error.message}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>New chapter alerts</Text>
+              <Text style={styles.rowHint}>Get notified when a new chapter comes out.</Text>
+            </View>
+            <Switch
+              accessibilityLabel="New chapter alerts"
+              value={item.notifications_enabled}
+              disabled={update.isPending}
+              onValueChange={(v) => update.mutate({ notifications_enabled: v })}
+              trackColor={{ false: "#2A2A2E", true: palette.primaryDeep }}
+              thumbColor={item.notifications_enabled ? palette.primary : "#8E8E93"}
+            />
+          </View>
+
+          {update.isError ? (
+            <Text accessibilityLiveRegion="polite" style={styles.error}>
+              {update.error.message}
             </Text>
           ) : null}
-        </View>
 
-        {latestUrl || firstUrl ? (
-          <View style={styles.readRow}>
-            {firstUrl ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Read first chapter"
-                onPress={() => openInBrowser(firstUrl)}
-                style={({ pressed }) => [latestUrl ? styles.readFirst : styles.primary, !latestUrl && { flex: 1 }, pressed && { opacity: 0.85 }]}
-              >
-                <Ionicons name="play-skip-back-outline" size={19} color={latestUrl ? palette.text : "#fff"} />
-                <Text style={latestUrl ? styles.readFirstText : styles.primaryText}>{latestUrl ? "First chapter" : "Read first chapter"}</Text>
-              </Pressable>
-            ) : null}
-            {latestUrl ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Read latest chapter"
-                onPress={() => openInBrowser(latestUrl)}
-                style={({ pressed }) => [styles.primary, { flex: firstUrl ? 1.25 : 1 }, pressed && { opacity: 0.85 }]}
-              >
-                <Ionicons name="book-outline" size={19} color="#fff" />
-                <Text style={styles.primaryText}>{firstUrl ? "Latest chapter" : "Read latest chapter"}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-        {behind ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Mark ${latest ?? "latest"} as read`}
-            disabled={update.isPending}
-            onPress={() => update.mutate({ last_chapter_read: chapterToStore(m.latest_chapter!), last_chapter_url: m.latest_chapter_url })}
-            style={({ pressed }) => [styles.secondary, (pressed || update.isPending) && { opacity: 0.7 }]}
+            accessibilityLabel="Remove from library"
+            disabled={remove.isPending}
+            onPress={() => setConfirmingRemove(true)}
+            style={({ pressed }) => [styles.remove, (pressed || remove.isPending) && { opacity: 0.7 }]}
           >
-            <Ionicons name="checkmark-done" size={19} color={palette.text} />
-            <Text style={styles.secondaryText}>Mark {latest ?? "latest"} as read</Text>
+            <Ionicons name="trash-outline" size={18} color={palette.danger} />
+            <Text style={styles.removeText}>Remove from library</Text>
           </Pressable>
-        ) : null}
-
-        {continueUrl || sourceUrl ? (
-          <View style={styles.links}>
-            {continueUrl ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Continue reading"
-                onPress={() => openInBrowser(continueUrl)}
-                style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]}
-              >
-                <Ionicons name="play-outline" size={18} color={palette.text} />
-                <Text style={styles.linkText}>Continue reading</Text>
-              </Pressable>
-            ) : null}
-            {sourceUrl ? (
-              <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={`Open on ${site ?? "the source site"}`}
-                onPress={() => openInBrowser(sourceUrl)}
-                style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]}
-              >
-                <Ionicons name="open-outline" size={18} color={palette.text} />
-                <Text style={styles.linkText}>Open on {site ?? "the site"}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-
-        {m.summary ? (
-          <View>
-            <Text style={styles.sectionLabel}>ABOUT</Text>
-            <Text numberOfLines={expanded ? undefined : 4} style={styles.summary}>
-              {m.summary}
-            </Text>
-            {longSummary ? (
-              <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setExpanded((e) => !e)}>
-                <Text style={styles.more}>{expanded ? "Show less" : "Read more"}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-
-        <View>
-          <Text style={styles.sectionLabel}>READING STATUS</Text>
-          <View style={styles.chips}>
-            {STATUSES.map((s) => {
-              const on = item.reading_status === s.key;
-              return (
-                <Pressable
-                  key={s.key}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  disabled={update.isPending}
-                  onPress={() => !on && update.mutate({ reading_status: s.key })}
-                  style={[styles.chip, on && styles.chipOn]}
-                >
-                  <Text style={[styles.chipText, on && styles.chipTextOn]}>{s.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View>
-          <Text style={styles.sectionLabel}>YOUR RATING</Text>
-          <RatingStars value={item.rating} busy={rate.isPending} onRate={(n) => rate.mutate(n)} onClear={() => rate.mutate(null)} />
-          {rate.isError ? (
-            <Text accessibilityLiveRegion="polite" style={[styles.error, { marginTop: 8 }]}>
-              {rate.error.message}
-            </Text>
-          ) : null}
-        </View>
-
-        <View style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.rowTitle}>New chapter alerts</Text>
-            <Text style={styles.rowHint}>Get notified when a new chapter comes out.</Text>
-          </View>
-          <Switch
-            accessibilityLabel="New chapter alerts"
-            value={item.notifications_enabled}
-            disabled={update.isPending}
-            onValueChange={(v) => update.mutate({ notifications_enabled: v })}
-            trackColor={{ false: "#2A2A2E", true: palette.primaryDeep }}
-            thumbColor={item.notifications_enabled ? palette.primary : "#8E8E93"}
-          />
-        </View>
-
-        {update.isError ? (
-          <Text accessibilityLiveRegion="polite" style={styles.error}>
-            {update.error.message}
-          </Text>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Remove from library"
-          disabled={remove.isPending}
-          onPress={() => setConfirmingRemove(true)}
-          style={({ pressed }) => [styles.remove, (pressed || remove.isPending) && { opacity: 0.7 }]}
-        >
-          <Ionicons name="trash-outline" size={18} color={palette.danger} />
-          <Text style={styles.removeText}>Remove from library</Text>
-        </Pressable>
-        {remove.isError ? <Text style={styles.error}>{remove.error.message}</Text> : null}
+          {remove.isError ? <Text style={styles.error}>{remove.error.message}</Text> : null}
+        </Reveal>
       </ScrollView>
       <ConfirmDialog
         visible={confirmingRemove}
@@ -369,6 +376,7 @@ function Pill({ label }: { label: string }) {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 40, gap: 20 },
+  group: { gap: 20 }, // the same spacing as `content`, for the blocks that arrive together
   hero: { flexDirection: "row", gap: 16 },
   cover: { width: 118, height: 170, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   heroText: { flex: 1, justifyContent: "center", gap: 6 },
