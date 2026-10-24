@@ -182,6 +182,10 @@ Under the progress bar on the title page, **I'M UP TO CHAPTER** is a number fiel
 
 "Remove from library" on a title's page asks first in the app's own `ConfirmDialog` (`components/ConfirmDialog.tsx`), not the system alert: a card centred over a dimmed backdrop with a trash badge, the title's cover, name and "You're on Ch. N", the reminder that updates stop and progress is deleted, and two buttons, **Keep it** (left) and **Remove** (right, in the alert colour). Only **Remove** deletes: a tap on the backdrop, Android's Back button or **Keep it** cancels, and a tap on the card itself does nothing. The same dialog is used for every confirmation: **Sign out** (Settings, and the "can't reach" screen; the cancel button reads *Stay signed in*), **Clear read alerts** and **Mark everything as read** (Updates; the last one is not destructive, so its button is red-brand rather than danger-red). The component is generic (title, message, icon, labels, `destructive`, children). Plain system alerts remain only for notices with a single OK (export failed, notifications blocked, "Alerts arriving late?").
 
+## Tags on the title page
+
+The title page lists the title's tags (its genres, `manga.genres`, as MangaPulse stores them) as chips under a **TAGS** heading, above the summary. They arrive with the library list, so there is no extra request and they work offline. The section is left out when a title has none; blanks and repeats are skipped. Since MangaPulse normalises spellings across the two sites (see its README), the same tag reads the same whichever site the title came from, but titles added before that migration was deployed show the old spellings until it has run.
+
 ## Motion when a title opens
 
 Three small, short effects, all built on React Native's own `Animated` with the native driver (no new library, nothing native to rebuild):

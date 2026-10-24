@@ -25,6 +25,7 @@ The app is shown to users as **MangaPulse** (the code lives in the `mangly` repo
 | Export the library as CSV or JSON, reading stats, clear read alerts | Implemented (built on the phone; clearing uses `DELETE /notifications/read`) |
 | Change password in the app | Implemented (existing `POST /auth/change-password`; this device is signed in again, other devices are signed out) |
 | Home hero: Similar / Popular recommendations | Implemented. Needs MangaPulse `GET /manga/home-picks` (to be deployed) |
+| Tags (genres) on the title page | Implemented (from the existing library list; spellings are unified by MangaPulse `feat/normalise-genres`) |
 | Continue reading cards (next unread chapter of titles being read) at the start of the hero | Implemented (built on the phone from the Library; opens the last chapter read, no backend change) |
 | New-chapter notifications | Implemented (background check, no backend change). Tapping one opens the chapter; Settings shows the last check, the typical delay and a test button. Delivery is delayed by Android, see ARCHITECTURE.md. Settings → Recent alerts lists when each chapter was found and when its notification was shown |
 | Pick by mood (AI) | Implemented for accounts with the `mood_recommendations` feature (existing endpoint; shares the daily AI limit) |

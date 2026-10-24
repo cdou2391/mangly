@@ -93,6 +93,27 @@ describe("the page", () => {
     expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
   });
 
+  it("shows the title's tags, in the order the site lists them", async () => {
+    list.mockResolvedValue([item({}, { genres: ["Action", "Sci-Fi", "Shounen"] })]);
+    await renderDetail();
+    await screen.findByText("TAGS");
+    expect(screen.getByLabelText("Tags: Action, Sci-Fi, Shounen")).toBeTruthy();
+    for (const tag of ["Action", "Sci-Fi", "Shounen"]) expect(within(screen.getByLabelText(/^Tags:/)).getByText(tag)).toBeTruthy();
+  });
+
+  it("shows a tag once, and skips blank ones", async () => {
+    list.mockResolvedValue([item({}, { genres: ["Action", " Action ", "", "  ", "Drama"] })]);
+    await renderDetail();
+    expect(await screen.findByLabelText("Tags: Action, Drama")).toBeTruthy();
+  });
+
+  it.each([[null], [[]], [["", "  "]]])("has no tags section for a title without tags (%j)", async (genres) => {
+    list.mockResolvedValue([item({}, { genres })]);
+    await renderDetail();
+    await screen.findByText("Naruto");
+    expect(screen.queryByText("TAGS")).toBeNull();
+  });
+
   it("collapses a long summary until asked", async () => {
     list.mockResolvedValue([item({}, { summary: "word ".repeat(80) })]);
     await renderDetail();

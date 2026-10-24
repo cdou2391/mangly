@@ -143,6 +143,8 @@ export default function MangaDetail() {
       ...(ll !== null && chapter === ll && m.latest_chapter_url ? { last_chapter_url: m.latest_chapter_url } : {}),
     });
   const longSummary = (m.summary?.length ?? 0) > 220;
+  // The title's genres, as the sites list them; blanks and repeats left out.
+  const tags = [...new Set((m.genres ?? []).map((g) => g.trim()).filter(Boolean))];
 
   return (
     <Screen padded={false}>
@@ -259,6 +261,17 @@ export default function MangaDetail() {
         </Reveal>
 
         <Reveal delay={180} style={styles.group}>
+          {tags.length > 0 ? (
+            <View>
+              <Text style={styles.sectionLabel}>TAGS</Text>
+              <View accessible accessibilityLabel={`Tags: ${tags.join(", ")}`} style={styles.tags}>
+                {tags.map((tag) => (
+                  <Pill key={tag} label={tag} />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
           {m.summary ? (
             <View>
               <Text style={styles.sectionLabel}>ABOUT</Text>
@@ -383,6 +396,7 @@ const styles = StyleSheet.create({
   title: { color: palette.text, fontSize: 24, fontWeight: "800", letterSpacing: -0.5, lineHeight: 28 },
   author: { color: palette.muted, fontSize: 14 },
   pills: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
+  tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { borderRadius: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", paddingHorizontal: 9, paddingVertical: 3 },
   pillText: { color: "#C8C8CC", fontSize: 12, fontWeight: "700" },
   progressCard: { borderRadius: 16, backgroundColor: palette.card, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", padding: 16 },
